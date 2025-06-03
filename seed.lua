@@ -7,11 +7,13 @@ local RunService = game:GetService("RunService")
 -- Variabel global
 local testingActive = false
 local exploitLog = {}
-local remoteTimer = {} -- Timer lokal per remote
+local remoteTimer = {} -- Timer per remote
 local remoteList = {} -- Daftar RemoteEvents/Functions
-local selectedRemote = nil -- Remote yang dipilih
-local customArgs = nil -- Argumen kustom dari input
-local uiDragging = false -- Status drag UI
+local selectedRemote = nil -- Remote terpilih
+local customArgs = nil -- Argumen kustom
+local hackMethod = "AutoSpam" -- Metode peretasan
+local uiStates = {} -- Status minimize/maximize
+local draggingFrame = nil -- Frame yang di-drag
 
 -- Fungsi logging
 local function logExploit(action, status, details)
@@ -27,20 +29,20 @@ local function logExploit(action, status, details)
 	return logText
 end
 
--- Deteksi semua RemoteEvents dan RemoteFunctions
+-- Deteksi RemoteEvents/RemoteFunctions
 local function detectRemotes()
 	remoteList = {}
 	for _, obj in pairs(ReplicatedStorage:GetDescendants()) do
 		if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
 			table.insert(remoteList, obj)
-			remoteTimer[obj] = { lastCall = 0, cooldown = 0 } -- Timer dan cooldown lokal
+			remoteTimer[obj] = { lastCall = 0, cooldown = 0 }
 			logExploit("Remote Detection", "Success", "Found: " .. obj:GetFullName())
 		end
 	end
 	return #remoteList > 0
 end
 
--- Argumen uji default
+-- Argumen uji
 local testArgs = {
 	nil,
 	"instant",
@@ -53,35 +55,54 @@ local testArgs = {
 	"function() end",
 }
 
--- Fungsi untuk menguji remote
-local function testRemote(remote, args)
+-- Fungsi pengujian remote
+local function testRemote(remote, args, method)
 	if not remote or remoteTimer[remote].cooldown > 0 then return false end
-	local success, result = pcall(function()
-		if remote:IsA("RemoteEvent") then
-			remote:FireServer(args)
-			return "Fired"
-		elseif remote:IsA("RemoteFunction") then
-			return remote:InvokeServer(args)
-		end
-	end)
+	local success, result
+	if method == "PropertyManip" then
+		success, result = pcall(function()
+			Players.LocalPlayer.leaderstats[remote.Name] = 999999
+			return "Attempted property manipulation"
+		end)
+	else
+		success, result = pcall(function()
+			if remote:IsA("RemoteEvent") then
+				remote:FireServer(args)
+				return "Fired"
+			else
+				return remote:InvokeServer(args)
+			end
+		end)
+	end
 	remoteTimer[remote].lastCall = tick()
-	remoteTimer[remote].cooldown = 0 -- Bypass cooldown klien
+	remoteTimer[remote].cooldown = 0
 	local status = success and "Success" or "Failed"
-	local details = remote:GetFullName() .. " with args: " .. tostring(args) .. ", Result: " .. tostring(result)
+	local details = remote:GetFullName() .. " with args: " .. tostring(args) .. ", Method: " .. method .. ", Result: " .. tostring(result)
 	logExploit("Test Remote", status, details)
 	return success, status, details
 end
 
--- Loop pengujian otomatis
+-- Loop pengujian
 local function runExploitLoop()
 	if not testingActive then return end
 	local argsToUse = customArgs or testArgs
 	for _, remote in ipairs(remoteList) do
 		if selectedRemote == nil or remote == selectedRemote then
-			for _, arg in ipairs(argsToUse) do
-				if not testingActive then return end
-				testRemote(remote, arg)
-				task.wait(0.01)
+			if hackMethod == "AutoSpam" then
+				for _, arg in ipairs(argsToUse) do
+					if not testingActive then return end
+					testRemote(remote, arg, hackMethod)
+					task.wait(0.01)
+				end
+			elseif hackMethod == "FloodTest" then
+				for i = 1, 100 do
+					if not testingActive then return end
+					testRemote(remote, argsToUse[math.random(1, #argsToUse)], hackMethod)
+					task.wait(0.001)
+				end
+			else
+				testRemote(remote, argsToUse[1], hackMethod)
+				task.wait(0.1)
 			end
 		end
 	end
@@ -101,184 +122,49 @@ local function parseCustomArgs(input)
 	end
 end
 
--- Buat UI dengan Instance.new
+-- Buat UI
 local function createUI()
 	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "AdvancedSecurityTestUI"
+	screenGui.Name = "ZXHELLSecurityTools"
 	screenGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 	screenGui.ResetOnSpawn = false
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.DisplayOrder = 1000
 
-	-- Frame utama
-	local mainFrame = Instance.new("Frame")
-	mainFrame.Size = UDim2.new(0, 450, 0, 350)
-	mainFrame.Position = UDim2.new(0.5, -225, 0.5, -175)
-	mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-	mainFrame.BorderSizePixel = 0
-	mainFrame.ClipsDescendants = true
-	mainFrame.Parent = screenGui
-	Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 8)
-
-	-- Title bar (untuk drag)
-	local titleBar = Instance.new("Frame")
-	titleBar.Size = UDim2.new(1, 0, 0, 30)
-	titleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-	titleBar.BorderSizePixel = 0
-	titleBar.Parent = mainFrame
-	Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 8)
-
-	local titleLabel = Instance.new("TextLabel")
-	titleLabel.Size = UDim2.new(1, -30, 1, 0)
-	titleLabel.Position = UDim2.new(0, 5, 0, 0)
-	titleLabel.BackgroundTransparency = 1
-	titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	titleLabel.Text = "Advanced Security Test"
-	titleLabel.Font = Enum.Font.SourceSansBold
-	titleLabel.TextSize = 18
-	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-	titleLabel.Parent = titleBar
-
-	-- Tombol close
-	local closeButton = Instance.new("TextButton")
-	closeButton.Size = UDim2.new(0, 30, 0, 30)
-	closeButton.Position = UDim2.new(1, -30, 0, 0)
-	closeButton.BackgroundTransparency = 1
-	closeButton.TextColor3 = Color3.fromRGB(255, 100, 100)
-	closeButton.Text = "X"
-	closeButton.Font = Enum.Font.SourceSansBold
-	closeButton.TextSize = 18
-	closeButton.Parent = titleBar
-
-	-- Log box dengan scroll
-	local logFrame = Instance.new("Frame")
-	logFrame.Size = UDim2.new(1, -10, 0, 150)
-	logFrame.Position = UDim2.new(0, 5, 0, 40)
-	logFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-	logFrame.BorderSizePixel = 0
-	logFrame.Parent = mainFrame
-	Instance.new("UICorner", logFrame).CornerRadius = UDim.new(0, 4)
-
-	local logBox = Instance.new("TextBox")
-	logBox.Size = UDim2.new(1, -10, 1, -10)
-	logBox.Position = UDim2.new(0, 5, 0, 5)
-	logBox.BackgroundTransparency = 1
-	logBox.TextColor3 = Color3.fromRGB(200, 200, 200)
-	logBox.TextWrapped = true
-	logBox.TextYAlignment = Enum.TextYAlignment.Top
-	logBox.Text = "Log: Detecting remotes..."
-	logBox.MultiLine = true
-	logBox.ClearTextOnFocus = false
-	logBox.TextEditable = false
-	logBox.Font = Enum.Font.SourceSans
-	logBox.TextSize = 14
-	logBox.Parent = logFrame
-
-	local logScrolling = Instance.new("ScrollingFrame")
-	logScrolling.Size = UDim2.new(1, 0, 1, 0)
-	logScrolling.Position = UDim2.new(0, 0, 0, 0)
-	logScrolling.BackgroundTransparency = 1
-	logScrolling.ScrollBarThickness = 6
-	logScrolling.CanvasSize = UDim2.new(0, 0, 0, 0)
-	logScrolling.Parent = logFrame
-	logBox.Parent = logScrolling
-
-	-- Status timer
-	local timerFrame = Instance.new("ScrollingFrame")
-	timerFrame.Size = UDim2.new(1, -10, 0, 80)
-	timerFrame.Position = UDim2.new(0, 5, 0, 195)
-	timerFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-	timerFrame.ScrollBarThickness = 6
-	timerFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-	timerFrame.Parent = mainFrame
-	Instance.new("UICorner", timerFrame).CornerRadius = UDim.new(0, 4)
-
-	local timerLayout = Instance.new("UIListLayout")
-	timerLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	timerLayout.Padding = UDim.new(0, 2)
-	timerLayout.Parent = timerFrame
-
-	-- Input argumen kustom
-	local argsInput = Instance.new("TextBox")
-	argsInput.Size = UDim2.new(1, -10, 0, 30)
-	argsInput.Position = UDim2.new(0, 5, 0, 280)
-	argsInput.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-	argsInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-	argsInput.PlaceholderText = "Enter custom args (e.g., {test=123})"
-	argsInput.Font = Enum.Font.SourceSans
-	argsInput.TextSize = 14
-	argsInput.Parent = mainFrame
-	Instance.new("UICorner", argsInput).CornerRadius = UDim.new(0, 4)
-
-	-- Tombol kontrol
-	local startButton = Instance.new("TextButton")
-	startButton.Size = UDim2.new(0.33, -5, 0, 30)
-	startButton.Position = UDim2.new(0, 5, 1, -35)
-	startButton.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
-	startButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	startButton.Text = "Start Testing"
-	startButton.Font = Enum.Font.SourceSansBold
-	startButton.TextSize = 16
-	startButton.Parent = mainFrame
-	Instance.new("UICorner", startButton).CornerRadius = UDim.new(0, 4)
-
-	local stopButton = Instance.new("TextButton")
-	stopButton.Size = UDim2.new(0.33, -5, 0, 30)
-	stopButton.Position = UDim2.new(0.33, 0, 1, -35)
-	stopButton.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
-	stopButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	stopButton.Text = "Stop Testing"
-	stopButton.Font = Enum.Font.SourceSansBold
-	stopButton.TextSize = 16
-	stopButton.Parent = mainFrame
-	Instance.new("UICorner", stopButton).CornerRadius = UDim.new(0, 4)
-
-	local singleButton = Instance.new("TextButton")
-	singleButton.Size = UDim2.new(0.33, -5, 0, 30)
-	singleButton.Position = UDim2.new(0.66, 0, 1, -35)
-	singleButton.BackgroundColor3 = Color3.fromRGB(0, 80, 120)
-	singleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	singleButton.Text = "Single Test"
-	singleButton.Font = Enum.Font.SourceSansBold
-	singleButton.TextSize = 16
-	singleButton.Parent = mainFrame
-	Instance.new("UICorner", singleButton).CornerRadius = UDim.new(0, 4)
-
-	-- Dropdown remote
-	local remoteDropdown = Instance.new("TextButton")
-	remoteDropdown.Size = UDim2.new(1, -10, 0, 30)
-	remoteDropdown.Position = UDim2.new(0, 5, 0, 315)
-	remoteDropdown.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-	remoteDropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
-	remoteDropdown.Text = "Select Remote: All"
-	remoteDropdown.Font = Enum.Font.SourceSans
-	remoteDropdown.TextSize = 16
-	remoteDropdown.Parent = mainFrame
-	Instance.new("UICorner", remoteDropdown).CornerRadius = UDim.new(0, 4)
-
-	local dropdownList = Instance.new("Frame")
-	dropdownList.Size = UDim2.new(1, 0, 0, 100)
-	dropdownList.Position = UDim2.new(0, 0, 1, 0)
-	dropdownList.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-	dropdownList.Visible = false
-	dropdownList.Parent = remoteDropdown
-	Instance.new("UICorner", dropdownList).CornerRadius = UDim.new(0, 4)
-
-	local dropdownScrolling = Instance.new("ScrollingFrame")
-	dropdownScrolling.Size = UDim2.new(1, 0, 1, 0)
-	dropdownScrolling.BackgroundTransparency = 1
-	dropdownScrolling.ScrollBarThickness = 6
-	dropdownScrolling.CanvasSize = UDim2.new(0, 0, 0, 0)
-	dropdownScrolling.Parent = dropdownList
+	-- Skala untuk mobile
+	local scaleFactor = math.min(1, math.min(workspace.CurrentCamera.ViewportSize.X / 800, workspace.CurrentCamera.ViewportSize.Y / 600))
+	local function createFrame(name, size, position)
+		local frame = Instance.new("Frame")
+		frame.Name = name
+		frame.Size = UDim2.new(size.X.Scale * scaleFactor, size.X.Offset * scaleFactor, size.Y.Scale * scaleFactor, size.Y.Offset * scaleFactor)
+		frame.Position = UDim2.new(position.X.Scale, position.X.Offset * scaleFactor, position.Y.Scale, position.Y.Offset * scaleFactor)
+		frame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+		frame.BorderSizePixel = 0
+		frame.ClipsDescendants = true
+		Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+		local glow = Instance.new("UIGradient")
+		glow.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 255)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 255))
+		})
+		glow.Rotation = 45
+		glow.Transparency = NumberSequence.new(0.7)
+		local border = Instance.new("UIStroke")
+		border.Thickness = 2
+		border.Color = Color3.fromRGB(0, 255, 255)
+		border.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		border.Transparency = 0.3
+		border.Parent = frame
+		glow.Parent = border
+		frame.Parent = screenGui
+		return frame
+	end
 
 	-- Animasi tombol
 	local function animateButton(button, hover)
 		spawn(function()
 			local originalColor = button.BackgroundColor3
-			local targetColor = hover and Color3.fromRGB(
-				math.min(originalColor.R * 255 + 20, 255),
-				math.min(originalColor.G * 255 + 20, 255),
-				math.min(originalColor.B * 255 + 20, 255)
-			) or originalColor
+			local targetColor = hover and Color3.fromRGB(0, 100, 200) or Color3.fromRGB(0, 80, 150)
 			for t = 0, 1, 0.1 do
 				button.BackgroundColor3 = originalColor:Lerp(targetColor, t)
 				task.wait(0.02)
@@ -286,40 +172,340 @@ local function createUI()
 		end)
 	end
 
-	-- Perbarui log
-	local function updateLog(text)
-		logBox.Text = logBox.Text .. "\n" .. text
-		logScrolling.CanvasSize = UDim2.new(0, 0, 0, logBox.TextBounds.Y)
-		logScrolling.CanvasPosition = Vector2.new(0, logBox.TextBounds.Y)
-	end
-
-	-- Perbarui timer UI
-	local function updateTimerUI()
-		for _, child in ipairs(timerFrame:GetChildren()) do
-			if child:IsA("TextLabel") then
-				child:Destroy()
+	-- Fungsi minimize/maximize
+	local function toggleFrame(frame, titleBar)
+		local isMinimized = uiStates[frame] or false
+		frame.Size = isMinimized and UDim2.new(0, 200 * scaleFactor, 0, 250 * scaleFactor) or UDim2.new(0, 200 * scaleFactor, 0, 30 * scaleFactor)
+		for _, child in ipairs(frame:GetChildren()) do
+			if child ~= titleBar then
+				child.Visible = isMinimized
 			end
 		end
-		local yOffset = 0
-		for remote, timer in pairs(remoteTimer) do
-			local timerLabel = Instance.new("TextLabel")
-			timerLabel.Size = UDim2.new(1, -10, 0, 20)
-			timerLabel.Position = UDim2.new(0, 5, 0, yOffset)
-			timerLabel.BackgroundTransparency = 1
-			timerLabel.TextColor3 = timer.cooldown <= 0 and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
-			timerLabel.Text = string.format("%s: %s", remote.Name, timer.cooldown <= 0 and "Ready" or string.format("%.2fs", timer.cooldown))
-			timerLabel.Font = Enum.Font.SourceSans
-			timerLabel.TextSize = 14
-			timerLabel.TextXAlignment = Enum.TextXAlignment.Left
-			timerLabel.Parent = timerFrame
-			yOffset = yOffset + 22
-		end
-		timerFrame.CanvasSize = UDim2.new(0, 0, 0, yOffset)
+		uiStates[frame] = not isMinimized
 	end
 
-	-- Isi dropdown
-	local function populateDropdown()
-		for _, child in ipairs(dropdownScrolling:GetChildren()) do
+	-- Fungsi drag
+	local function setupDrag(frame, titleBar)
+		local dragStartPos, dragStartFramePos
+		titleBar.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				draggingFrame = frame
+				dragStartPos = input.Position
+				dragStartFramePos = frame.Position
+			end
+		end)
+		titleBar.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				draggingFrame = nil
+			end
+		end)
+	end
+
+	-- Frame Start
+	local startFrame = createFrame("StartFrame", UDim2.new(0, 200, 0, 100), UDim2.new(0.05, 10, 0.05, 10))
+	local startTitle = Instance.new("TextLabel")
+	startTitle.Size = UDim2.new(1, -30, 0, 30)
+	startTitle.BackgroundTransparency = 1
+	startTitle.TextColor3 = Color3.fromRGB(0, 255, 255)
+	startTitle.Text = "ZXHELL Start"
+	startTitle.Font = Enum.Font.SourceSansBold
+	startTitle.TextSize = 18 * scaleFactor
+	startTitle.Parent = startFrame
+	setupDrag(startFrame, startTitle)
+	startTitle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			toggleFrame(startFrame, startTitle)
+		end
+	end)
+
+	local startButton = Instance.new("TextButton")
+	startButton.Size = UDim2.new(1, -10, 0, 40)
+	startButton.Position = UDim2.new(0, 5, 0, 40)
+	startButton.BackgroundColor3 = Color3.fromRGB(0, 80, 150)
+	startButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	startButton.Text = "START TEST"
+	startButton.Font = Enum.Font.SourceSansBold
+	startButton.TextSize = 16 * scaleFactor
+	startButton.Parent = startFrame
+	Instance.new("UICorner", startButton).CornerRadius = UDim.new(0, 4)
+	startButton.MouseButton1Click:Connect(function()
+		testingActive = not testingActive
+		startButton.Text = testingActive and "STOP TEST" or "START TEST"
+		startButton.BackgroundColor3 = testingActive and Color3.fromRGB(150, 0, 0) or Color3.fromRGB(0, 80, 150)
+		logExploit("Testing", testingActive and "Started" or "Stopped", "Security test " .. (testingActive and "activated" or "deactivated"))
+		if testingActive then
+			spawn(runExploitLoop)
+		end
+	end)
+	startButton.MouseEnter:Connect(function() animateButton(startButton, true) end)
+	startButton.MouseLeave:Connect(function() animateButton(startButton, false) end)
+
+	-- Frame Proses
+	local processFrame = createFrame("ProcessFrame", UDim2.new(0, 200, 0, 250), UDim2.new(0.3, 10, 0.05, 10))
+	local processTitle = Instance.new("TextLabel")
+	processTitle.Size = UDim2.new(1, -30, 0, 30)
+	processTitle.BackgroundTransparency = 1
+	processTitle.TextColor3 = Color3.fromRGB(255, 0, 255)
+	processTitle.Text = "Proses"
+	processTitle.Font = Enum.Font.SourceSansBold
+	processTitle.TextSize = 18 * scaleFactor
+	processTitle.Parent = processFrame
+	setupDrag(processFrame, processTitle)
+	processTitle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			toggleFrame(processFrame, processTitle)
+		end
+	end)
+
+	local processLog = Instance.new("ScrollingFrame")
+	processLog.Size = UDim2.new(1, -10, 1, -40)
+	processLog.Position = UDim2.new(0, 5, 0, 35)
+	processLog.BackgroundTransparency = 1
+	processLog.ScrollBarThickness = 4
+	processLog.CanvasSize = UDim2.new(0, 0, 0, 0)
+	processLog.Parent = processFrame
+	local processLogBox = Instance.new("TextLabel")
+	processLogBox.Size = UDim2.new(1, -10, 0, 0)
+	processLogBox.BackgroundTransparency = 1
+	processLogBox.TextColor3 = Color3.fromRGB(200, 200, 200)
+	processLogBox.TextWrapped = true
+	processLogBox.TextYAlignment = Enum.TextYAlignment.Top
+	processLogBox.Text = "Menunggu aktivitas..."
+	processLogBox.Font = Enum.Font.SourceSans
+	processLogBox.TextSize = 14 * scaleFactor
+	processLogBox.Parent = processLog
+	local function updateProcessLog(text)
+		processLogBox.Text = processLogBox.Text .. "\n" .. text
+		processLogBox.Size = UDim2.new(1, -10, 0, processLogBox.TextBounds.Y)
+		processLog.CanvasSize = UDim2.new(0, 0, 0, processLogBox.TextBounds.Y)
+		processLog.CanvasPosition = Vector2.new(0, processLogBox.TextBounds.Y)
+	end
+
+	-- Frame Opsi
+	local optionsFrame = createFrame("OptionsFrame", UDim2.new(0, 200, 0, 250), UDim2.new(0.55, 10, 0.05, 10))
+	local optionsTitle = Instance.new("TextLabel")
+	optionsTitle.Size = UDim2.new(1, -30, 0, 30)
+	optionsTitle.BackgroundTransparency = 1
+	optionsTitle.TextColor3 = Color3.fromRGB(0, 255, 255)
+	optionsTitle.Text = "Opsi"
+	optionsTitle.Font = Enum.Font.SourceSansBold
+	optionsTitle.TextSize = 18 * scaleFactor
+	optionsTitle.Parent = optionsFrame
+	setupDrag(optionsFrame, optionsTitle)
+	optionsTitle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			toggleFrame(optionsFrame, optionsTitle)
+		end
+	end)
+
+	local argsInput = Instance.new("TextBox")
+	argsInput.Size = UDim2.new(1, -10, 0, 30)
+	argsInput.Position = UDim2.new(0, 5, 0, 40)
+	argsInput.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+	argsInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+	argsInput.PlaceholderText = "Argumen kustom (misal: {test=123})"
+	argsInput.Font = Enum.Font.SourceSans
+	argsInput.TextSize = 14 * scaleFactor
+	argsInput.Parent = optionsFrame
+	Instance.new("UICorner", argsInput).CornerRadius = UDim.new(0, 4)
+	argsInput.FocusLost:Connect(function(enterPressed)
+		if enterPressed then
+			local success, msg = parseCustomArgs(argsInput.Text)
+			updateProcessLog(success and "Argumen kustom: " .. msg or "Gagal parse: " .. msg)
+		end
+	end)
+
+	local delayInput = Instance.new("TextBox")
+	delayInput.Size = UDim2.new(1, -10, 0, 30)
+	delayInput.Position = UDim2.new(0, 5, 0, 80)
+	delayInput.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+	delayInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+	delayInput.PlaceholderText = "Delay (detik, misal: 0.01)"
+	delayInput.Text = "0.01"
+	delayInput.Font = Enum.Font.SourceSans
+	delayInput.TextSize = 14 * scaleFactor
+	delayInput.Parent = optionsFrame
+	Instance.new("UICorner", delayInput).CornerRadius = UDim.new(0, 4)
+
+	-- Frame Status
+	local statusFrame = createFrame("StatusFrame", UDim2.new(0, 200, 0, 250), UDim2.new(0.8, 10, 0.05, 10))
+	local statusTitle = Instance.new("TextLabel")
+	statusTitle.Size = UDim2.new(1, -30, 0, 30)
+	statusTitle.BackgroundTransparency = 1
+	statusTitle.TextColor3 = Color3.fromRGB(255, 0, 255)
+	statusTitle.Text = "Status"
+	statusTitle.Font = Enum.Font.SourceSansBold
+	statusTitle.TextSize = 18 * scaleFactor
+	statusTitle.Parent = statusFrame
+	setupDrag(statusFrame, statusTitle)
+	statusTitle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			toggleFrame(statusFrame, statusTitle)
+		end
+	end)
+
+	local statusLog = Instance.new("ScrollingFrame")
+	statusLog.Size = UDim2.new(1, -10, 1, -40)
+	statusLog.Position = UDim2.new(0, 5, 0, 35)
+	statusLog.BackgroundTransparency = 1
+	statusLog.ScrollBarThickness = 4
+	statusLog.CanvasSize = UDim2.new(0, 0, 0, 0)
+	statusLog.Parent = statusFrame
+	local statusLogBox = Instance.new("TextLabel")
+	statusLogBox.Size = UDim2.new(1, -10, 0, 0)
+	statusLogBox.BackgroundTransparency = 1
+	statusLogBox.TextColor3 = Color3.fromRGB(200, 200, 200)
+	statusLogBox.TextWrapped = true
+	statusLogBox.TextYAlignment = Enum.TextYAlignment.Top
+	statusLogBox.Text = "Kerentanan akan ditampilkan di sini..."
+	statusLogBox.Font = Enum.Font.SourceSans
+	statusLogBox.TextSize = 14 * scaleFactor
+	statusLogBox.Parent = statusLog
+	local function updateStatusLog(text)
+		if text:find("Success") then
+			local remoteName = text:match("Test Remote: Success%((.-) with args") or "Unknown"
+			local arg = text:match("args: (.-), Method") or "Unknown"
+			local vulnText = string.format("Kerentanan: %s rentan terhadap argumen %s", remoteName, arg)
+			statusLogBox.Text = statusLogBox.Text .. "\n" .. vulnText
+			statusLogBox.Size = UDim2.new(1, -10, 0, statusLogBox.TextBounds.Y)
+			statusLog.CanvasSize = UDim2.new(0, 0, 0, statusLogBox.TextBounds.Y)
+			statusLog.CanvasPosition = Vector2.new(0, statusLogBox.TextBounds.Y)
+		end
+	end
+
+	-- Frame Metode
+	local methodFrame = createFrame("MethodFrame", UDim2.new(0, 200, 0, 250), UDim2.new(0.05, 10, 0.4, 10))
+	local methodTitle = Instance.new("TextLabel")
+	methodTitle.Size = UDim2.new(1, -30, 0, 30)
+	methodTitle.BackgroundTransparency = 1
+	methodTitle.TextColor3 = Color3.fromRGB(0, 255, 255)
+	methodTitle.Text = "Metode Peretasan"
+	methodTitle.Font = Enum.Font.SourceSansBold
+	methodTitle.TextSize = 18 * scaleFactor
+	methodTitle.Parent = methodFrame
+	setupDrag(methodFrame, methodTitle)
+	methodTitle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			toggleFrame(methodFrame, methodTitle)
+		end
+	end)
+
+	local methodDropdown = Instance.new("TextButton")
+	methodDropdown.Size = UDim2.new(1, -10, 0, 30)
+	methodDropdown.Position = UDim2.new(0, 5, 0, 40)
+	methodDropdown.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+	methodDropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
+	methodDropdown.Text = "Pilih Metode: Auto Spam"
+	methodDropdown.Font = Enum.Font.SourceSans
+	methodDropdown.TextSize = 14 * scaleFactor
+	methodDropdown.Parent = methodFrame
+	Instance.new("UICorner", methodDropdown).CornerRadius = UDim.new(0, 4)
+
+	local methodList = Instance.new("Frame")
+	methodList.Size = UDim2.new(1, 0, 0, 100)
+	methodList.Position = UDim2.new(0, 0, 1, 0)
+	methodList.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+	methodList.Visible = false
+	methodList.Parent = methodDropdown
+	Instance.new("UICorner", methodList).CornerRadius = UDim.new(0, 4)
+
+	local methodScrolling = Instance.new("ScrollingFrame")
+	methodScrolling.Size = UDim2.new(1, 0, 1, 0)
+	methodScrolling.BackgroundTransparency = 1
+	methodScrolling.ScrollBarThickness = 4
+	methodScrolling.CanvasSize = UDim2.new(0, 0, 0, 0)
+	methodScrolling.Parent = methodList
+
+	local methods = {
+		{ name = "Auto Spam", desc = "Spam semua argumen secara otomatis" },
+		{ name = "Single Shot", desc = "Uji satu argumen per klik" },
+		{ name = "Custom Args", desc = "Gunakan argumen kustom" },
+		{ name = "Flood Test", desc = "Spam cepat untuk uji beban" },
+		{ name = "Property Manip", desc = "Coba ubah properti pemain" },
+	}
+	local yOffset = 0
+	for _, method in ipairs(methods) do
+		local button = Instance.new("TextButton")
+		button.Size = UDim2.new(1, 0, 0, 25)
+		button.Position = UDim2.new(0, 0, 0, yOffset)
+		button.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+		button.TextColor3 = Color3.fromRGB(255, 255, 255)
+		button.Text = method.name
+		button.Font = Enum.Font.SourceSans
+		button.TextSize = 14 * scaleFactor
+		button.Parent = methodScrolling
+		button.MouseButton1Click:Connect(function()
+			hackMethod = method.name:gsub(" ", "")
+			methodDropdown.Text = "Pilih Metode: " .. method.name
+			methodList.Visible = false
+			updateProcessLog("Metode diubah: " .. method.name)
+		end)
+		button.MouseEnter:Connect(function() animateButton(button, true) end)
+		button.MouseLeave:Connect(function() animateButton(button, false) end)
+		local tooltip = Instance.new("TextLabel")
+		tooltip.Size = UDim2.new(0, 150, 0, 40)
+		tooltip.Position = UDim2.new(1, 5, 0, 0)
+		tooltip.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+		tooltip.TextColor3 = Color3.fromRGB(200, 200, 200)
+		tooltip.Text = method.desc
+		tooltip.TextWrapped = true
+		tooltip.Visible = false
+		tooltip.Parent = button
+		Instance.new("UICorner", tooltip).CornerRadius = UDim.new(0, 4)
+		button.MouseEnter:Connect(function() tooltip.Visible = true end)
+		button.MouseLeave:Connect(function() tooltip.Visible = false end)
+		yOffset = yOffset + 25
+	end
+	methodScrolling.CanvasSize = UDim2.new(0, 0, 0, yOffset)
+	methodDropdown.MouseButton1Click:Connect(function()
+		methodList.Visible = not methodList.Visible
+	end)
+
+	-- Remote Dropdown
+	local remoteFrame = createFrame("RemoteFrame", UDim2.new(0, 200, 0, 250), UDim2.new(0.3, 10, 0.4, 10))
+	local remoteTitle = Instance.new("TextLabel")
+	remoteTitle.Size = UDim2.new(1, -30, 0, 30)
+	remoteTitle.BackgroundTransparency = 1
+	remoteTitle.TextColor3 = Color3.fromRGB(255, 0, 255)
+	remoteTitle.Text = "Pilih Remote"
+	remoteTitle.Font = Enum.Font.SourceSansBold
+	remoteTitle.TextSize = 18 * scaleFactor
+	remoteTitle.Parent = remoteFrame
+	setupDrag(remoteFrame, remoteTitle)
+	remoteTitle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			toggleFrame(remoteFrame, remoteTitle)
+		end
+	end)
+
+	local remoteDropdown = Instance.new("TextButton")
+	remoteDropdown.Size = UDim2.new(1, -10, 0, 30)
+	remoteDropdown.Position = UDim2.new(0, 5, 0, 40)
+	remoteDropdown.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+	remoteDropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
+	remoteDropdown.Text = "Pilih Remote: Semua"
+	remoteDropdown.Font = Enum.Font.SourceSans
+	remoteDropdown.TextSize = 14 * scaleFactor
+	remoteDropdown.Parent = remoteFrame
+	Instance.new("UICorner", remoteDropdown).CornerRadius = UDim.new(0, 4)
+
+	local remoteListFrame = Instance.new("Frame")
+	remoteListFrame.Size = UDim2.new(1, 0, 0, 100)
+	remoteListFrame.Position = UDim2.new(0, 0, 1, 0)
+	remoteListFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+	remoteListFrame.Visible = false
+	remoteListFrame.Parent = remoteDropdown
+	Instance.new("UICorner", remoteListFrame).CornerRadius = UDim.new(0, 4)
+
+	local remoteScrolling = Instance.new("ScrollingFrame")
+	remoteScrolling.Size = UDim2.new(1, 0, 1, 0)
+	remoteScrolling.BackgroundTransparency = 1
+	remoteScrolling.ScrollBarThickness = 4
+	remoteScrolling.CanvasSize = UDim2.new(0, 0, 0, 0)
+	remoteScrolling.Parent = remoteListFrame
+
+	local function populateRemotes()
+		for _, child in ipairs(remoteScrolling:GetChildren()) do
 			if child:IsA("TextButton") then
 				child:Destroy()
 			end
@@ -328,16 +514,16 @@ local function createUI()
 		local allButton = Instance.new("TextButton")
 		allButton.Size = UDim2.new(1, 0, 0, 25)
 		allButton.Position = UDim2.new(0, 0, 0, yOffset)
-		allButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+		allButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 		allButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-		allButton.Text = "All Remotes"
+		allButton.Text = "Semua Remote"
 		allButton.Font = Enum.Font.SourceSans
-		allButton.TextSize = 14
-		allButton.Parent = dropdownScrolling
+		allButton.TextSize = 14 * scaleFactor
+		allButton.Parent = remoteScrolling
 		allButton.MouseButton1Click:Connect(function()
 			selectedRemote = nil
-			remoteDropdown.Text = "Select Remote: All"
-			dropdownList.Visible = false
+			remoteDropdown.Text = "Pilih Remote: Semua"
+			remoteListFrame.Visible = false
 		end)
 		allButton.MouseEnter:Connect(function() animateButton(allButton, true) end)
 		allButton.MouseLeave:Connect(function() animateButton(allButton, false) end)
@@ -346,144 +532,84 @@ local function createUI()
 			local button = Instance.new("TextButton")
 			button.Size = UDim2.new(1, 0, 0, 25)
 			button.Position = UDim2.new(0, 0, 0, yOffset)
-			button.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+			button.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 			button.TextColor3 = Color3.fromRGB(255, 255, 255)
-			button.Text = remote:GetFullName()
+			button.Text = remote.Name
 			button.Font = Enum.Font.SourceSans
-			button.TextSize = 14
-			button.Parent = dropdownScrolling
+			button.TextSize = 14 * scaleFactor
+			button.Parent = remoteScrolling
 			button.MouseButton1Click:Connect(function()
 				selectedRemote = remote
-				remoteDropdown.Text = "Select Remote: " .. remote.Name
-				dropdownList.Visible = false
+				remoteDropdown.Text = "Pilih Remote: " .. remote.Name
+				remoteListFrame.Visible = false
 			end)
 			button.MouseEnter:Connect(function() animateButton(button, true) end)
 			button.MouseLeave:Connect(function() animateButton(button, false) end)
 			yOffset = yOffset + 25
 		end
-		dropdownScrolling.CanvasSize = UDim2.new(0, 0, 0, yOffset)
+		remoteScrolling.CanvasSize = UDim2.new(0, 0, 0, yOffset)
 	end
 
-	-- Event UI
-	startButton.MouseButton1Click:Connect(function()
-		if not testingActive then
-			testingActive = true
-			startButton.BackgroundColor3 = Color3.fromRGB(0, 80, 0)
-			updateLog("Testing started")
-			spawn(runExploitLoop)
-		end
-	end)
-	startButton.MouseEnter:Connect(function() animateButton(startButton, true) end)
-	startButton.MouseLeave:Connect(function() animateButton(startButton, false) end)
-
-	stopButton.MouseButton1Click:Connect(function()
-		if testingActive then
-			testingActive = false
-			startButton.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
-			updateLog("Testing stopped")
-		end
-	end)
-	stopButton.MouseEnter:Connect(function() animateButton(stopButton, true) end)
-	stopButton.MouseLeave:Connect(function() animateButton(stopButton, false) end)
-
-	singleButton.MouseButton1Click:Connect(function()
-		if selectedRemote then
-			local argsToUse = customArgs or testArgs
-			for _, arg in ipairs(argsToUse) do
-				local success, status, details = testRemote(selectedRemote, arg)
-				if success then
-					updateLog(status .. ": " .. details)
-				end
+	-- Update timer
+	local function updateTimerUI()
+		for _, timer in pairs(remoteTimer) do
+			if timer.cooldown > 0 then
+				timer.cooldown = timer.cooldown - RunService.Heartbeat:Wait()
 			end
-		else
-			updateLog("Select a remote first")
 		end
-	end)
-	singleButton.MouseEnter:Connect(function() animateButton(singleButton, true) end)
-	singleButton.MouseLeave:Connect(function() animateButton(singleButton, false) end)
+	end
 
-	closeButton.MouseButton1Click:Connect(function()
-		screenGui:Destroy()
-		testingActive = false
-	end)
+	-- Update log dan status
+	local function updateLogs(text)
+		updateProcessLog(text)
+		updateStatusLog(text)
+	end
 
-	argsInput.FocusLost:Connect(function(enterPressed)
-		if enterPressed then
-			local success, msg = parseCustomArgs(argsInput.Text)
-			updateLog(success and "Custom args set: " .. msg or "Failed to parse args: " .. msg)
-		end
-	end)
-
-	remoteDropdown.MouseButton1Click:Connect(function()
-		dropdownList.Visible = not dropdownList.Visible
-	end)
-
-	-- Drag UI
-	local dragStartPos, dragStartFramePos
-	titleBar.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			uiDragging = true
-			dragStartPos = input.Position
-			dragStartFramePos = mainFrame.Position
-		end
-	end)
-
-	titleBar.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			uiDragging = false
-		end
-	end)
-
+	-- Drag handler
 	UserInputService.InputChanged:Connect(function(input)
-		if uiDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-			local delta = input.Position - dragStartPos
-			mainFrame.Position = UDim2.new(
-				dragStartFramePos.X.Scale,
-				dragStartFramePos.X.Offset + delta.X,
-				dragStartFramePos.Y.Scale,
-				dragStartFramePos.Y.Offset + delta.Y
+		if draggingFrame and input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			local delta = input.Position - draggingFrame.dragStartPos
+			draggingFrame.Position = UDim2.new(
+				draggingFrame.dragStartFramePos.X.Scale,
+				draggingFrame.dragStartFramePos.X.Offset + delta.X,
+				draggingFrame.dragStartFramePos.Y.Scale,
+				draggingFrame.dragStartFramePos.Y.Offset + delta.Y
 			)
 		end
 	end)
 
-	-- Tutup dropdown saat klik di luar
+	-- Tutup dropdown
 	UserInputService.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 and dropdownList.Visible then
-			local mousePos = UserInputService:GetMouseLocation()
-			local dropdownPos = dropdownList.AbsolutePosition
-			local dropdownSize = dropdownList.AbsoluteSize
-			if mousePos.X < dropdownPos.X or mousePos.X > dropdownPos.X + dropdownSize.X or
-				mousePos.Y < dropdownPos.Y or mousePos.Y > dropdownPos.Y + dropdownSize.Y then
-				dropdownList.Visible = false
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			if methodList.Visible and not methodDropdown:IsAncestorOf(input.Target) then
+				methodList.Visible = false
+			end
+			if remoteListFrame.Visible and not remoteDropdown:IsAncestorOf(input.Target) then
+				remoteListFrame.Visible = false
 			end
 		end
-	end)
-
-	-- Update timer setiap frame
-	RunService.Heartbeat:Connect(function(delta)
-		for _, timer in pairs(remoteTimer) do
-			if timer.cooldown > 0 then
-				timer.cooldown = timer.cooldown - delta
-			end
-		end
-		updateTimerUI()
 	end)
 
 	-- Inisialisasi
 	if detectRemotes() then
-		updateLog("Detected " .. #remoteList .. " remotes")
-		populateDropdown()
+		updateLogs("Terdeteksi " .. #remoteList .. " remote")
+		populateRemotes()
 	else
-		updateLog("No remotes found in ReplicatedStorage")
+		updateLogs("Tidak ada remote ditemukan")
 	end
 
+	-- Timer update
+	RunService.Heartbeat:Connect(updateTimerUI)
+
+	-- Log awal
+	updateLogs("ZXHELL Security Tools siap! Klik START TEST untuk mulai.")
 	return screenGui
 end
 
 -- Inisialisasi
 createUI()
 
--- Cetak log akhir
+-- Log akhir
 game:BindToClose(function()
 	local logJson = HttpService:JSONEncode(exploitLog)
 	print("Final Exploit Log:", logJson)
