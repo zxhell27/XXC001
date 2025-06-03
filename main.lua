@@ -1,1621 +1,1281 @@
--- TurtleSpy V1.5.3 (Enhanced by Gemini, Arceus X Compatibility Fix V2)
--- Credits to Intrer#0421 for the original script
-print("TurtleSpy V2 Loading...")
+-- TurtleSpy V1.5.3, credits to Intrer#0421
+-- Dimodifikasi oleh ZXHELL X ZEDLIST
 
+-- Pengaturan warna baru (dominan merah)
 local colorSettings =
 {
     ["Main"] = {
-        ["HeaderColor"] = Color3.fromRGB(0, 168, 255),
-        ["HeaderShadingColor"] = Color3.fromRGB(0, 151, 230),
-        ["HeaderTextColor"] = Color3.fromRGB(47, 54, 64),
-        ["MainBackgroundColor"] = Color3.fromRGB(47, 54, 64),
-        ["InfoScrollingFrameBgColor"] = Color3.fromRGB(47, 54, 64),
-        ["ScrollBarImageColor"] = Color3.fromRGB(127, 143, 166),
-        ["InputBackgroundColor"] = Color3.fromRGB(53, 59, 72),
-        ["InputBorderColor"] = Color3.fromRGB(113, 128, 147),
-        ["InputTextColor"] = Color3.fromRGB(220, 221, 225)
+        ["HeaderColor"] = Color3.fromRGB(200, 0, 0), -- Merah Tua
+        ["HeaderShadingColor"] = Color3.fromRGB(150, 0, 0), -- Merah Lebih Tua untuk Shading
+        ["HeaderTextColor"] = Color3.fromRGB(255, 220, 220), -- Putih Kemerahan Muda
+        ["MainBackgroundColor"] = Color3.fromRGB(60, 10, 10), -- Merah Sangat Tua Gelap
+        ["InfoScrollingFrameBgColor"] = Color3.fromRGB(60, 10, 10), -- Merah Sangat Tua Gelap
+        ["ScrollBarImageColor"] = Color3.fromRGB(180, 50, 50) -- Merah untuk Scrollbar
     },
     ["RemoteButtons"] = {
-        ["BorderColor"] = Color3.fromRGB(113, 128, 147),
-        ["BackgroundColor"] = Color3.fromRGB(53, 59, 72),
-        ["TextColor"] = Color3.fromRGB(220, 221, 225),
-        ["NumberTextColor"] = Color3.fromRGB(203, 204, 207)
+        ["BorderColor"] = Color3.fromRGB(120, 20, 20), -- Merah Tua untuk Border
+        ["BackgroundColor"] = Color3.fromRGB(80, 15, 15), -- Merah Gelap untuk Background
+        ["TextColor"] = Color3.fromRGB(255, 200, 200), -- Putih Kemerahan
+        ["NumberTextColor"] = Color3.fromRGB(255, 180, 180) -- Putih Kemerahan Muda
     },
     ["MainButtons"] = { 
-        ["BorderColor"] = Color3.fromRGB(113, 128, 147),
-        ["BackgroundColor"] = Color3.fromRGB(53, 59, 72),
-        ["TextColor"] = Color3.fromRGB(220, 221, 225)
+        ["BorderColor"] = Color3.fromRGB(120, 20, 20), -- Merah Tua untuk Border
+        ["BackgroundColor"] = Color3.fromRGB(80, 15, 15), -- Merah Gelap untuk Background
+        ["TextColor"] = Color3.fromRGB(255, 200, 200) -- Putih Kemerahan
     },
     ['Code'] = {
-        ['BackgroundColor'] = Color3.fromRGB(35, 40, 48),
-        ['TextColor'] = Color3.fromRGB(220, 221, 225),
-        ['CreditsColor'] = Color3.fromRGB(108, 108, 108)
+        ['BackgroundColor'] = Color3.fromRGB(50, 5, 5), -- Merah Sangat Tua untuk Background Kode
+        ['TextColor'] = Color3.fromRGB(255, 220, 220), -- Putih Kemerahan Muda
+        ['CreditsColor'] = Color3.fromRGB(150, 120, 120) -- Merah Abu-abu untuk Kredit
     },
 }
 
 local settings = {
-    ["Keybind"] = "P",
-    ["AutoScroll"] = true,
-    ["MaxDisplayedRemotes"] = 200
+    ["Keybind"] = "P"
 }
 
--- Layanan Roblox
+if PROTOSMASHER_LOADED then
+    getgenv().isfile = newcclosure(function(File)
+        local Suc, Er = pcall(readfile, File)
+        if not Suc then
+            return false
+        end
+        return true
+    end)
+end
+
 local HttpService = game:GetService("HttpService")
-local TextService = game:GetService("TextService")
-local CoreGui = game:GetService("CoreGui")
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-
--- Variabel Global
-local client = Players.LocalPlayer
-local mouse = nil
-if client then mouse = client:GetMouse() end
-
-local executorName = "Unknown"
-local getThreadContextFunc = function() return 7 end -- Default aman
-local setThreadContextFunc = function() end -- Default aman
-local getCallingScriptFunc = function() return getfenv(0).script end -- Fallback umum
-local decompileFunc = function() return "-- Decompilation not reliably available" end
-local getNamecallMethodFunc = function() return "" end
-
--- Deteksi Executor Sederhana & Penyesuaian Fungsi
-if syn and syn.protect_gui then
-    executorName = "Synapse X"
-    getThreadContextFunc = syn.get_thread_identity
-    setThreadContextFunc = syn.set_thread_identity
-    if getcallingscript then getCallingScriptFunc = getcallingscript end
-    if decompile then decompileFunc = decompile end
-    if getnamecallmethod then getNamecallMethodFunc = getnamecallmethod end
-    print("TurtleSpy: Synapse X detected.")
-elseif PROTOSMASHER_LOADED then
-    executorName = "ProtoSmasher"
-    if get_thread_context then getThreadContextFunc = get_thread_context end
-    if set_thread_context then setThreadContextFunc = set_thread_context end
-    -- getCallingScriptFunc sudah diatur ke fallback umum
-    -- decompileFunc sudah diatur ke fallback umum
-    if get_namecall_method then getNamecallMethodFunc = get_namecall_method end
-    print("TurtleSpy: ProtoSmasher detected.")
-elseif typeof(Arceus) == "table" or typeof(getgenv().Arceus) == "table" then
-    executorName = "Arceus X"
-    -- Fungsi lain menggunakan fallback default yang seharusnya lebih aman untuk Arceus X
-    print("TurtleSpy: Arceus X detected (or similar). Using general fallbacks.")
+-- baca pengaturan untuk keybind
+if not isfile("TurtleSpySettings.json") then
+    writefile("TurtleSpySettings.json", HttpService:JSONEncode(settings))
 else
-    print("TurtleSpy: Executor tidak dikenal. Menggunakan fallback umum.")
-end
-
--- Fungsi File I/O (gunakan global jika ada, jika tidak, fallback ke io)
-local function safeIsFile(path)
-    local success, result = pcall(isfile, path)
-    if success then return result end
-    local f_success, f_result = pcall(io.open, path, "r")
-    if f_success and f_result then f_result:close(); return true end
-    return false
-end
-
-local function safeReadFile(path)
-    local success, result = pcall(readfile, path)
-    if success then return result end
-    local f_success, f_handle = pcall(io.open, path, "r")
-    if f_success and f_handle then
-        local content_success, content = pcall(f_handle.read, f_handle, "*a")
-        pcall(f_handle.close, f_handle)
-        if content_success then return content end
-    end
-    warn("TurtleSpy: safeReadFile failed for path: ", path)
-    return nil
-end
-
-local function safeWriteFile(path, content)
-    local success, result = pcall(writefile, path, content)
-    if success then return result end
-    local f_success, f_handle = pcall(io.open, path, "w")
-    if f_success and f_handle then
-        local write_success, write_err = pcall(f_handle.write, f_handle, content)
-        pcall(f_handle.close, f_handle)
-        if write_success then return true end
-        warn("TurtleSpy: safeWriteFile (io) error: ", write_err)
-    else
-        warn("TurtleSpy: safeWriteFile (io) open error: ", f_handle)
-    end
-    return false
-end
-
--- Muat atau buat file pengaturan
-local settingsFileName = "TurtleSpySettings_v2.json"
-if not safeIsFile(settingsFileName) then
-    local success, err = pcall(safeWriteFile, settingsFileName, HttpService:JSONEncode(settings))
-    if not success then warn("TurtleSpy: Gagal menyimpan pengaturan awal:", err) end
-else
-    local success, currentSettingsJson = pcall(safeReadFile, settingsFileName)
-    if success and currentSettingsJson then
-        local decodedSuccess, decodedSettings = pcall(HttpService.JSONDecode, HttpService, currentSettingsJson)
-        if decodedSuccess then
-            for k, v in pairs(settings) do
-                if decodedSettings[k] == nil then
-                    decodedSettings[k] = v
-                end
-            end
-            settings = decodedSettings
-            local resaveSuccess, resaveErr = pcall(safeWriteFile, settingsFileName, HttpService:JSONEncode(settings))
-            if not resaveSuccess then warn("TurtleSpy: Gagal menyimpan ulang pengaturan:", resaveErr) end
+    local success, decodedSettings = pcall(HttpService.JSONDecode, HttpService, readfile("TurtleSpySettings.json"))
+    if success and decodedSettings then
+        if decodedSettings["Main"] then -- Memeriksa apakah format lama
+            writefile("TurtleSpySettings.json", HttpService:JSONEncode(settings)) -- Menulis ulang dengan format baru jika format lama
         else
-            warn("TurtleSpy: Gagal mendekode pengaturan, menggunakan default:", decodedSettings)
-            pcall(safeWriteFile, settingsFileName .. ".backup", currentSettingsJson)
-            pcall(safeWriteFile, settingsFileName, HttpService:JSONEncode(settings))
+            settings = decodedSettings
         end
     else
-        warn("TurtleSpy: Gagal membaca file pengaturan, menggunakan default:", currentSettingsJson)
-        pcall(safeWriteFile, settingsFileName, HttpService:JSONEncode(settings))
+        -- Jika gagal decode, tulis ulang dengan pengaturan default
+        warn("Gagal membaca TurtleSpySettings.json, menggunakan pengaturan default.")
+        writefile("TurtleSpySettings.json", HttpService:JSONEncode(settings))
     end
 end
-print("TurtleSpy: Pengaturan dimuat.")
 
--- Fungsi Utilitas
-local function toUnicode(str)
-    if not str then return "utf8.char()" end
+-- Kompatibilitas untuk protosmasher: kredit ke sdjsdj (nama pengguna v3rm) untuk konversi ke proto
+
+function isSynapse()
+    if PROTOSMASHER_LOADED then
+        return false
+    else
+        return true
+    end
+end
+
+function Parent(GUI)
+    if syn and syn.protect_gui then
+        syn.protect_gui(GUI)
+        GUI.Parent = game:GetService("CoreGui")
+    elseif PROTOSMASHER_LOADED then
+        GUI.Parent = get_hidden_gui()
+    else
+        GUI.Parent = game:GetService("CoreGui")
+    end
+end
+
+local client = game.Players.LocalPlayer
+local function toUnicode(string)
     local codepoints = "utf8.char("
-    local success, codes = pcall(utf8.codes, str)
-    if not success or not codes then return "utf8.char()" end
-    for _i, v in ipairs(codes) do codepoints = codepoints .. v .. ', ' end
+    
+    for _i, v in utf8.codes(string) do
+        codepoints = codepoints .. v .. ', '
+    end
+    
     return codepoints:sub(1, -3) .. ')'
 end
 
 local function GetFullPathOfAnInstance(instance)
-    if not instance then return "nil" end
-    if not instance.Parent then
-        if instance == game then return "game" end
-        if instance == workspace then return "workspace" end
-        if instance == CoreGui then return "game:GetService('CoreGui')" end
-        if instance == Players then return "game:GetService('Players')" end
-        if client and instance == client then return "game:GetService('Players').LocalPlayer" end
-        return (instance.Name or "UnknownInstance") .. " --[[ PARENTED TO NIL OR DESTROYED ]]"
+    if not instance then return "nil" end -- Perbaikan bug: Menangani instance nil
+    local name = instance.Name
+    local head = (#name > 0 and '.' .. name) or "['']"
+    
+    if not instance.Parent and instance ~= game then
+        return head .. " --[[ PARENTED TO NIL OR DESTROYED ]]"
     end
-    local path = {}
-    local current = instance
-    while current ~= game and current.Parent do
-        local name = current.Name
-        if string.match(name, "^[%w_]+$") and not tonumber(name:sub(1,1)) then
-            table.insert(path, 1, "." .. name)
+    
+    if instance == game then
+        return "game"
+    elseif instance == workspace then
+        return "workspace"
+    else
+        local _success, result = pcall(game.GetService, game, instance.ClassName)
+        
+        if result and result == instance then -- Pastikan GetService mengembalikan instance yang sama
+            head = ':GetService("' .. instance.ClassName .. '")'
+        elseif instance == client then
+            head = '.LocalPlayer' 
         else
-            table.insert(path, 1, '["' .. name:gsub('"', '\\"'):gsub('\\', '\\\\') .. '"]')
-        end
-        if current.Parent == game then
-            local isService = false
-            local sucGetService, serviceInstance = pcall(game.GetService, game, current.ClassName)
-            if sucGetService and serviceInstance == current then
-                table.remove(path, 1)
-                table.insert(path, 1, ':GetService("' .. current.ClassName .. '")')
-                isService = true
+            local nonAlphaNum = name:gsub('[%w_]', '')
+            local noPunct = nonAlphaNum:gsub('[%s%p]', '')
+            
+            if tonumber(name:sub(1, 1)) or (#nonAlphaNum ~= 0 and #noPunct == 0) then
+                head = '["' .. name:gsub('"', '\\"'):gsub('\\', '\\\\') .. '"]'
+            elseif #nonAlphaNum ~= 0 and #noPunct > 0 then
+                head = '[' .. toUnicode(name) .. ']'
             end
-            if not isService and #path > 0 and path[1]:sub(1,1) == "." then path[1] = path[1]:sub(2) end
-            table.insert(path, 1, "game")
-            break 
         end
-        current = current.Parent
-        if not current then break end
     end
-    local resultPath = table.concat(path, "")
-    resultPath = resultPath:gsub("^game%.%.", "game.") -- Perbaikan untuk duplikasi titik
-    return resultPath
+    
+    if instance.Parent then
+        return GetFullPathOfAnInstance(instance.Parent) .. head
+    else
+        return head -- Jika instance.Parent adalah nil tetapi bukan game (misalnya CoreGui)
+    end
 end
-print("TurtleSpy: Fungsi utilitas siap.")
+-- Skrip Utama
 
--- Hapus instance TurtleSpyGUI sebelumnya
-pcall(function()
-    local oldGui = CoreGui:FindFirstChild("TurtleSpyGUI_V2")
-    if oldGui then oldGui:Destroy(); print("TurtleSpy: GUI lama dihapus.") end
-end)
+-- referensi ke fungsi game (untuk mencegah penggunaan namecall di dalam hook namecall)
+local isA = game.IsA
+local clone = game.Clone -- Seharusnya Instance.clone jika Instance adalah variabel lokal, atau langsung Instance.new("Part").Clone jika itu yang dimaksud
 
--- Variabel dan Tabel Penting GUI
+local TextService = game:GetService("TextService")
+local getTextSize = TextService.GetTextSize -- Seharusnya TextService:GetTextSize
+if game:GetService("Players").LocalPlayer then
+    local mouse = game:GetService("Players").LocalPlayer:GetMouse() -- Dipindahkan ke sini agar lebih aman
+    mouse.KeyDown:Connect(function(key)
+        if key:lower() == settings["Keybind"]:lower() then
+            TurtleSpyGUI.Enabled = not TurtleSpyGUI.Enabled
+        end
+    end)
+else
+    warn("LocalPlayer tidak ditemukan saat inisialisasi TurtleSpy.")
+end
+
+game:GetService("StarterGui").ResetPlayerGuiOnSpawn = false -- Menggunakan GetService untuk konsistensi
+
+
+-- hapus instance turtlespy sebelumnya
+if game:GetService("CoreGui"):FindFirstChild("TurtleSpyGUI") then
+    game:GetService("CoreGui").TurtleSpyGUI:Destroy()
+end
+
+--Tabel penting dan offset GUI
 local buttonOffset = -25
-local scrollSizeOffset = 287 
+local scrollSizeOffset = 287 -- Inisialisasi yang benar
 local functionImage = "http://www.roblox.com/asset/?id=413369623"
 local eventImage = "http://www.roblox.com/asset/?id=413369506"
-local remoteData = {} 
-local IgnoreList = {} 
-local BlockList = {} 
-local unstackedRemotes = {} 
-local activeConnections = {} 
+local remotes = {}
+local remoteArgs = {}
+local remoteButtons = {}
+local remoteScripts = {}
+-- local IgnoreList = {} -- Bug: Didefinisikan dua kali, yang ini dihapus
+local BlockList = {}
+local IgnoreList = {} -- Definisi IgnoreList yang ini dipertahankan
+local connections = {}
+local unstacked = {}
 
--- GUI Elements 
+-- Kode (sebagian besar) dibuat oleh Gui to lua
 local TurtleSpyGUI = Instance.new("ScreenGui")
 local mainFrame = Instance.new("Frame")
 local Header = Instance.new("Frame")
 local HeaderShading = Instance.new("Frame")
 local HeaderTextLabel = Instance.new("TextLabel")
 local RemoteScrollFrame = Instance.new("ScrollingFrame")
-local RemoteButtonTemplate = Instance.new("TextButton") 
-local NumberLabelTemplate = Instance.new("TextLabel")
-local RemoteNameLabelTemplate = Instance.new("TextLabel")
-local RemoteIconTemplate = Instance.new("ImageLabel")
+local RemoteButton = Instance.new("TextButton")
+local Number = Instance.new("TextLabel")
+local RemoteName = Instance.new("TextLabel")
+local RemoteIcon = Instance.new("ImageLabel")
 local InfoFrame = Instance.new("Frame")
 local InfoFrameHeader = Instance.new("Frame")
 local InfoTitleShading = Instance.new("Frame")
-local InfoHeaderText = Instance.new("TextLabel")
-local CloseInfoFrameButton = Instance.new("TextButton")
 local CodeFrame = Instance.new("ScrollingFrame")
-local CodeTextLabel = Instance.new("TextLabel")
-local CodeCommentTextLabel = Instance.new("TextLabel")
-local ArgumentEditorFrame = Instance.new("Frame") 
-local ArgumentEditorLabel = Instance.new("TextLabel")
-local ArgumentEditorTextBox = Instance.new("TextBox") 
-local ApplyArgumentsButton = Instance.new("TextButton") 
+local Code = Instance.new("TextLabel")
+local CodeComment = Instance.new("TextLabel")
+local InfoHeaderText = Instance.new("TextLabel")
 local InfoButtonsScroll = Instance.new("ScrollingFrame")
-local CopyCodeButton = Instance.new("TextButton")
-local RunCodeButton = Instance.new("TextButton")
-local CopyScriptPathButton = Instance.new("TextButton")
-local CopyDecompiledButton = Instance.new("TextButton")
-local IgnoreRemoteButton = Instance.new("TextButton")
-local BlockRemoteButton = Instance.new("TextButton")
-local WhileLoopButton = Instance.new("TextButton")
-local CopyReturnValueButton = Instance.new("TextButton")
-local ClearLogsButton = Instance.new("TextButton")
-local UnstackRemoteButton = Instance.new("TextButton")
-local CopyFullPathButton = Instance.new("TextButton") 
-local OpenInfoFrameButton = Instance.new("TextButton")
-local MinimizeButton = Instance.new("TextButton")
-local FilterTextBox = Instance.new("TextBox") 
-local SaveSessionButton = Instance.new("TextButton")
-local LoadSessionButton = Instance.new("TextButton")
-local UnstackAllButton = Instance.new("TextButton") 
-local HookSettingsFrame = Instance.new("Frame")
-local ToggleFireServerHookButton = Instance.new("TextButton")
-local ToggleInvokeServerHookButton = Instance.new("TextButton")
-local ToggleNamecallHookButton = Instance.new("TextButton")
+local CopyCode = Instance.new("TextButton")
+local RunCode = Instance.new("TextButton")
+local CopyScriptPath = Instance.new("TextButton")
+local CopyDecompiled = Instance.new("TextButton")
+local IgnoreRemote = Instance.new("TextButton")
+local BlockRemote = Instance.new("TextButton")
+local WhileLoop = Instance.new("TextButton")
+local CopyReturn = Instance.new("TextButton")
+local Clear = Instance.new("TextButton")
+local FrameDivider = Instance.new("Frame")
+local CloseInfoFrame = Instance.new("TextButton")
+local OpenInfoFrame = Instance.new("TextButton")
+local Minimize = Instance.new("TextButton")
+local DoNotStack = Instance.new("TextButton")
+local ImageButton = Instance.new("ImageButton")
+
+-- Browser Remote
 local BrowserHeader = Instance.new("Frame")
 local BrowserHeaderFrame = Instance.new("Frame")
 local BrowserHeaderText = Instance.new("TextLabel")
-local CloseBrowserButton = Instance.new("TextButton")
+local CloseInfoFrame2 = Instance.new("TextButton")
 local RemoteBrowserFrame = Instance.new("ScrollingFrame")
-local RemoteButtonBrowserTemplate = Instance.new("TextButton")
-local RemoteNameBrowserTemplate = Instance.new("TextLabel")
-local RemoteIconBrowserTemplate = Instance.new("ImageLabel")
-local OpenBrowserButton = Instance.new("ImageButton") 
-print("TurtleSpy: Variabel GUI dideklarasikan.")
+local RemoteButton2 = Instance.new("TextButton")
+local RemoteName2 = Instance.new("TextLabel")
+local RemoteIcon2 = Instance.new("ImageLabel")
 
--- Fungsi Parent GUI yang Ditingkatkan
-local function ParentGUI(guiInstance)
-    if syn and syn.protect_gui then
-        pcall(syn.protect_gui, guiInstance) -- Bungkus dengan pcall untuk keamanan
+TurtleSpyGUI.Name = "TurtleSpyGUI"
+TurtleSpyGUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling -- Untuk konsistensi render
+
+Parent(TurtleSpyGUI)
+
+mainFrame.Name = "mainFrame"
+mainFrame.Parent = TurtleSpyGUI
+mainFrame.BackgroundColor3 = colorSettings["Main"]["MainBackgroundColor"] -- Warna baru
+mainFrame.BorderColor3 = colorSettings["Main"]["BorderColor"] or colorSettings["Main"]["MainBackgroundColor"] -- Fallback jika BorderColor tidak ada
+mainFrame.Position = UDim2.new(0.100000001, 0, 0.239999995, 0)
+mainFrame.Size = UDim2.new(0, 207, 0, 35)
+mainFrame.ZIndex = 8
+mainFrame.Active = true
+mainFrame.Draggable = true
+
+-- Properti browser remote
+
+BrowserHeader.Name = "BrowserHeader"
+BrowserHeader.Parent = TurtleSpyGUI
+BrowserHeader.BackgroundColor3 = colorSettings["Main"]["HeaderShadingColor"]
+BrowserHeader.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"]
+BrowserHeader.Position = UDim2.new(0.712152421, 0, 0.339464903, 0)
+BrowserHeader.Size = UDim2.new(0, 207, 0, 33)
+BrowserHeader.ZIndex = 20
+BrowserHeader.Active = true
+BrowserHeader.Draggable = true
+BrowserHeader.Visible = false
+
+BrowserHeaderFrame.Name = "BrowserHeaderFrame"
+BrowserHeaderFrame.Parent = BrowserHeader
+BrowserHeaderFrame.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
+BrowserHeaderFrame.BorderColor3 = colorSettings["Main"]["HeaderColor"]
+BrowserHeaderFrame.Position = UDim2.new(0, 0, -0.0202544238, 0)
+BrowserHeaderFrame.Size = UDim2.new(0, 207, 0, 26)
+BrowserHeaderFrame.ZIndex = 21
+
+BrowserHeaderText.Name = "InfoHeaderText" -- Seharusnya BrowserHeaderText
+BrowserHeaderText.Parent = BrowserHeaderFrame
+BrowserHeaderText.BackgroundTransparency = 1.000
+BrowserHeaderText.Position = UDim2.new(0, 0, -0.00206991332, 0)
+BrowserHeaderText.Size = UDim2.new(0, 206, 0, 33)
+BrowserHeaderText.ZIndex = 22
+BrowserHeaderText.Font = Enum.Font.SourceSans
+BrowserHeaderText.Text = "Remote Browser"
+BrowserHeaderText.TextColor3 = colorSettings["Main"]["HeaderTextColor"]
+BrowserHeaderText.TextSize = 17.000
+
+CloseInfoFrame2.Name = "CloseInfoFrame" -- Seharusnya CloseBrowserFrame atau semacamnya
+CloseInfoFrame2.Parent = BrowserHeaderFrame
+CloseInfoFrame2.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
+CloseInfoFrame2.BorderColor3 = colorSettings["Main"]["HeaderColor"]
+CloseInfoFrame2.Position = UDim2.new(0, 185, 0, 2)
+CloseInfoFrame2.Size = UDim2.new(0, 22, 0, 22)
+CloseInfoFrame2.ZIndex = 38
+CloseInfoFrame2.Font = Enum.Font.SourceSansLight
+CloseInfoFrame2.Text = "X"
+CloseInfoFrame2.TextColor3 = colorSettings["Main"]["HeaderTextColor"] -- Disesuaikan dengan tema
+CloseInfoFrame2.MouseButton1Click:Connect(function()
+    BrowserHeader.Visible = not BrowserHeader.Visible
+end)
+
+RemoteBrowserFrame.Name = "RemoteBrowserFrame"
+RemoteBrowserFrame.Parent = BrowserHeader
+RemoteBrowserFrame.Active = true
+RemoteBrowserFrame.BackgroundColor3 = colorSettings["Main"]["InfoScrollingFrameBgColor"] -- Warna baru
+RemoteBrowserFrame.BorderColor3 = colorSettings["Main"]["InfoScrollingFrameBgColor"] -- Warna baru
+RemoteBrowserFrame.Position = UDim2.new(-0.004540205, 0, 1.03504682, 0)
+RemoteBrowserFrame.Size = UDim2.new(0, 207, 0, 286)
+RemoteBrowserFrame.ZIndex = 19
+RemoteBrowserFrame.CanvasSize = UDim2.new(0, 0, 0, 287)
+RemoteBrowserFrame.ScrollBarThickness = 8
+RemoteBrowserFrame.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Left
+RemoteBrowserFrame.ScrollBarImageColor3 = colorSettings["Main"]["ScrollBarImageColor"]
+
+RemoteButton2.Name = "RemoteButton" -- Seharusnya BrowserRemoteButton
+RemoteButton2.Parent = RemoteBrowserFrame
+RemoteButton2.BackgroundColor3 = colorSettings["RemoteButtons"]["BackgroundColor"]
+RemoteButton2.BorderColor3 = colorSettings["RemoteButtons"]["BorderColor"]
+RemoteButton2.Position = UDim2.new(0, 17, 0, 10)
+RemoteButton2.Size = UDim2.new(0, 182, 0, 26)
+RemoteButton2.ZIndex = 20
+RemoteButton2.Selected = true
+RemoteButton2.Font = Enum.Font.SourceSans
+RemoteButton2.Text = ""
+RemoteButton2.TextSize = 18.000
+RemoteButton2.TextStrokeTransparency = 123.000 -- Sepertinya typo, mungkin maksudnya 1.000 atau property lain
+RemoteButton2.TextWrapped = true
+RemoteButton2.TextXAlignment = Enum.TextXAlignment.Left
+RemoteButton2.Visible = false
+
+RemoteName2.Name = "RemoteName2" -- Seharusnya BrowserRemoteName
+RemoteName2.Parent = RemoteButton2
+RemoteName2.BackgroundTransparency = 1.000
+RemoteName2.Position = UDim2.new(0, 5, 0, 0)
+RemoteName2.Size = UDim2.new(0, 155, 0, 26)
+RemoteName2.ZIndex = 21
+RemoteName2.Font = Enum.Font.SourceSans
+RemoteName2.Text = "RemoteEventaasdadad"
+RemoteName2.TextColor3 = colorSettings["RemoteButtons"]["TextColor"]
+RemoteName2.TextSize = 16.000
+RemoteName2.TextXAlignment = Enum.TextXAlignment.Left
+RemoteName2.TextTruncate = Enum.TextTruncate.AtEnd -- Lebih deskriptif
+
+RemoteIcon2.Name = "RemoteIcon2" -- Seharusnya BrowserRemoteIcon
+RemoteIcon2.Parent = RemoteButton2
+RemoteIcon2.BackgroundTransparency = 1.000
+RemoteIcon2.Position = UDim2.new(0.840260386, 0, 0.0225472748, 0)
+RemoteIcon2.Size = UDim2.new(0, 24, 0, 24)
+RemoteIcon2.ZIndex = 21
+RemoteIcon2.Image = functionImage
+
+local browsedRemotes = {}
+local browsedConnections = {}
+local browsedButtonOffset = 10
+local browserCanvasSize = 286
+
+ImageButton.Parent = Header
+ImageButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+ImageButton.BackgroundTransparency = 1.000
+ImageButton.Position = UDim2.new(0, 8, 0, 8)
+ImageButton.Size = UDim2.new(0, 18, 0, 18)
+ImageButton.ZIndex = 9
+ImageButton.Image = "rbxassetid://169476802" -- Pastikan ID aset ini valid
+ImageButton.ImageColor3 = colorSettings["Main"]["HeaderTextColor"] -- Disesuaikan dengan tema
+ImageButton.MouseButton1Click:Connect(function()
+    BrowserHeader.Visible = not BrowserHeader.Visible
+    -- Membersihkan remote yang sudah ada sebelumnya untuk mencegah duplikasi saat dibuka kembali
+    for _, btn in ipairs(RemoteBrowserFrame:GetChildren()) do
+        if btn:IsA("TextButton") and btn.Name == "RemoteButton" then -- Hanya hapus tombol remote yang relevan
+            btn:Destroy()
+        end
     end
-    -- Selalu parent ke CoreGui sebagai fallback atau default
-    guiInstance.Parent = CoreGui
-    print("TurtleSpy: GUI diparenting ke CoreGui.")
+    for _, conn in ipairs(browsedConnections) do
+        conn:Disconnect()
+    end
+    browsedConnections = {}
+    browsedButtonOffset = 10 -- Reset offset
+    browserCanvasSize = 286 -- Reset ukuran canvas
+    RemoteBrowserFrame.CanvasSize = UDim2.new(0, 0, 0, browserCanvasSize)
+
+
+    for i, v in pairs(game:GetDescendants()) do
+        if isA(v, "RemoteEvent") or isA(v, "RemoteFunction") then
+            local bButton = RemoteButton2:Clone() -- Menggunakan Clone dari template
+            bButton.Parent = RemoteBrowserFrame
+            bButton.Visible = true
+            bButton.Position = UDim2.new(0, 17, 0, browsedButtonOffset)
+            local fireFunction = ""
+            if isA(v, "RemoteEvent") then
+                fireFunction = ":FireServer()"
+                bButton.RemoteIcon2.Image = eventImage
+            else
+                fireFunction = ":InvokeServer()"
+                bButton.RemoteIcon2.Image = functionImage -- Memastikan ikon benar
+            end
+            bButton.RemoteName2.Text = v.Name
+            local pathOfInstance = GetFullPathOfAnInstance(v) -- Simpan path agar tidak dipanggil berulang kali
+            local connection = bButton.MouseButton1Click:Connect(function()
+                local success, err = pcall(setclipboard, pathOfInstance..fireFunction)
+                if not success then
+                    warn("Gagal menyalin ke clipboard:", err)
+                end
+            end)
+            table.insert(browsedConnections, connection)
+            browsedButtonOffset = browsedButtonOffset + 35
+
+            if #browsedConnections > 8 then -- Seharusnya menggunakan #RemoteBrowserFrame:GetChildren() atau counter yang lebih akurat
+                browserCanvasSize = browserCanvasSize + 35
+                RemoteBrowserFrame.CanvasSize = UDim2.new(0, 0, 0, browserCanvasSize)
+            end
+        end
+    end
+end)
+
+Header.Name = "Header"
+Header.Parent = mainFrame
+Header.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
+Header.BorderColor3 = colorSettings["Main"]["HeaderColor"]
+Header.Size = UDim2.new(0, 207, 0, 26)
+Header.ZIndex = 9
+
+HeaderShading.Name = "HeaderShading"
+HeaderShading.Parent = Header
+HeaderShading.BackgroundColor3 = colorSettings["Main"]["HeaderShadingColor"]
+HeaderShading.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"]
+HeaderShading.Position = UDim2.new(1.46719131e-07, 0, 0.285714358, 0)
+HeaderShading.Size = UDim2.new(0, 207, 0, 27)
+HeaderShading.ZIndex = 8
+
+HeaderTextLabel.Name = "HeaderTextLabel"
+HeaderTextLabel.Parent = HeaderShading
+HeaderTextLabel.BackgroundTransparency = 1.000
+HeaderTextLabel.Position = UDim2.new(-0.00507604145, 0, -0.202857122, 0)
+HeaderTextLabel.Size = UDim2.new(0, 215, 0, 29)
+HeaderTextLabel.ZIndex = 10
+HeaderTextLabel.Font = Enum.Font.GothamSemibold -- Font yang lebih modern jika tersedia, atau biarkan SourceSans
+HeaderTextLabel.Text = "ZXHELL X ZEDLIST" -- Judul baru
+HeaderTextLabel.TextColor3 = colorSettings["Main"]["HeaderTextColor"]
+HeaderTextLabel.TextSize = 18.000 -- Sedikit lebih besar untuk judul
+
+-- Fungsi untuk efek glitch pada judul
+local function applyGlitchEffect(textLabel, originalText)
+    local glitchChars = {"@", "#", "$", "%", "&", "*", "!", "?"}
+    local isGlitching = false
+
+    local function startGlitch()
+        if isGlitching then return end
+        isGlitching = true
+        task.spawn(function()
+            local duration = 0.3 -- Durasi efek glitch dalam detik
+            local interval = 0.05 -- Interval perubahan teks
+            local startTime = tick()
+            
+            while tick() - startTime < duration do
+                local newText = ""
+                for i = 1, #originalText do
+                    if math.random() < 0.7 then -- 70% kemungkinan karakter asli
+                        newText = newText .. originalText:sub(i,i)
+                    else -- 30% kemungkinan karakter glitch
+                        newText = newText .. glitchChars[math.random(#glitchChars)]
+                    end
+                end
+                textLabel.Text = newText
+                task.wait(interval)
+            end
+            textLabel.Text = originalText -- Kembalikan ke teks asli
+            isGlitching = false
+        end)
+    end
+    -- Panggil efek glitch sesekali atau saat UI pertama kali muncul
+    -- Contoh: panggil saat minimize/maximize atau saat pertama kali UI dibuat
+    -- Untuk demo, kita bisa panggil saat minimize di-klik
+    return startGlitch 
 end
 
--- Inisialisasi GUI Utama
-TurtleSpyGUI.Name = "TurtleSpyGUI_V2"
-TurtleSpyGUI.ResetOnSpawn = false -- PENTING: Sesuai referensi user untuk Arceus X
-TurtleSpyGUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling 
-ParentGUI(TurtleSpyGUI) -- Panggil setelah properti dasar ScreenGui diatur
+local triggerGlitch = applyGlitchEffect(HeaderTextLabel, "ZXHELL X ZEDLIST")
+-- Panggil triggerGlitch() saat event tertentu, misalnya saat UI pertama kali muncul atau saat tombol minimize diklik
+-- Untuk contoh, kita panggil sekali setelah UI dibuat
+task.wait(0.5) -- Tunggu UI dimuat
+triggerGlitch()
 
--- Fungsi untuk membuat UI 
-local function CreateUI()
-    pcall(function() -- Bungkus seluruh pembuatan UI dalam pcall
-        mainFrame.Name = "mainFrame"
-        mainFrame.Parent = TurtleSpyGUI
-        mainFrame.BackgroundColor3 = colorSettings["Main"]["MainBackgroundColor"]
-        mainFrame.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"] 
-        mainFrame.BorderSizePixel = 1
-        mainFrame.Position = UDim2.new(0.1, 0, 0.15, 0) 
-        mainFrame.Size = UDim2.new(0, 220, 0, 35) 
-        mainFrame.ZIndex = 1000
-        mainFrame.Active = true
-        mainFrame.Draggable = true
 
-        Header.Name = "Header"
-        Header.Parent = mainFrame
-        Header.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
-        Header.BorderSizePixel = 0
-        Header.Size = UDim2.new(1, 0, 0, 26)
-        Header.ZIndex = 1001
+RemoteScrollFrame.Name = "RemoteScrollFrame"
+RemoteScrollFrame.Parent = mainFrame
+RemoteScrollFrame.Active = true
+RemoteScrollFrame.BackgroundColor3 = colorSettings["Main"]["InfoScrollingFrameBgColor"] -- Warna baru
+RemoteScrollFrame.BorderColor3 = colorSettings["Main"]["InfoScrollingFrameBgColor"] -- Warna baru
+RemoteScrollFrame.Position = UDim2.new(0, 0, 1.02292562, 0)
+RemoteScrollFrame.Size = UDim2.new(0, 207, 0, 286)
+RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 287)
+RemoteScrollFrame.ScrollBarThickness = 8
+RemoteScrollFrame.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Left
+RemoteScrollFrame.ScrollBarImageColor3 = colorSettings["Main"]["ScrollBarImageColor"]
 
-        HeaderShading.Name = "HeaderShading" 
-        HeaderShading.Parent = Header
-        HeaderShading.BackgroundColor3 = colorSettings["Main"]["HeaderShadingColor"]
-        HeaderShading.BorderSizePixel = 0
-        HeaderShading.Position = UDim2.new(0, 0, 1, -1) 
-        HeaderShading.Size = UDim2.new(1, 0, 0, 1)
-        HeaderShading.ZIndex = 1000 
+RemoteButton.Name = "RemoteButton"
+RemoteButton.Parent = RemoteScrollFrame
+RemoteButton.BackgroundColor3 = colorSettings["RemoteButtons"]["BackgroundColor"]
+RemoteButton.BorderColor3 = colorSettings["RemoteButtons"]["BorderColor"]
+RemoteButton.Position = UDim2.new(0, 17, 0, 10)
+RemoteButton.Size = UDim2.new(0, 182, 0, 26)
+RemoteButton.Selected = true
+RemoteButton.Font = Enum.Font.SourceSans
+RemoteButton.Text = ""
+RemoteButton.TextColor3 = colorSettings["RemoteButtons"]["TextColor"] -- Warna baru
+RemoteButton.TextSize = 18.000
+RemoteButton.TextStrokeTransparency = 1.000 -- Memperbaiki kemungkinan typo
+RemoteButton.TextWrapped = true
+RemoteButton.TextXAlignment = Enum.TextXAlignment.Left
+RemoteButton.Visible = false
 
-        HeaderTextLabel.Name = "HeaderTextLabel"
-        HeaderTextLabel.Parent = Header
-        HeaderTextLabel.BackgroundTransparency = 1.000
-        HeaderTextLabel.Size = UDim2.new(1, -80, 1, 0) 
-        HeaderTextLabel.Position = UDim2.new(0, 5, 0, 0)
-        HeaderTextLabel.ZIndex = 1002
-        HeaderTextLabel.Font = Enum.Font.SourceSansSemibold
-        HeaderTextLabel.Text = "TurtleSpy V2"
-        HeaderTextLabel.TextColor3 = colorSettings["Main"]["HeaderTextColor"]
-        HeaderTextLabel.TextSize = 16.000
-        HeaderTextLabel.TextXAlignment = Enum.TextXAlignment.Left
+Number.Name = "Number"
+Number.Parent = RemoteButton
+Number.BackgroundTransparency = 1.000
+Number.Position = UDim2.new(0, 5, 0, 0)
+Number.Size = UDim2.new(0, 30, 0, 26) -- Ukuran disesuaikan agar tidak terlalu lebar
+Number.ZIndex = 2
+Number.Font = Enum.Font.SourceSans
+Number.Text = "1"
+Number.TextColor3 = colorSettings["RemoteButtons"]["NumberTextColor"]
+Number.TextSize = 16.000
+Number.TextWrapped = true
+Number.TextXAlignment = Enum.TextXAlignment.Left
 
-        MinimizeButton.Name = "MinimizeButton"
-        MinimizeButton.Parent = Header
-        MinimizeButton.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
-        MinimizeButton.BorderSizePixel = 0
-        MinimizeButton.Position = UDim2.new(1, -75, 0, 2)
-        MinimizeButton.Size = UDim2.new(0, 22, 0, 22)
-        MinimizeButton.ZIndex = 1003
-        MinimizeButton.Font = Enum.Font.SourceSansLight
-        MinimizeButton.Text = "_"
-        MinimizeButton.TextColor3 = colorSettings["Main"]["HeaderTextColor"]
-        MinimizeButton.TextSize = 20.000
+RemoteName.Name = "RemoteName"
+RemoteName.Parent = RemoteButton
+RemoteName.BackgroundTransparency = 1.000
+RemoteName.Position = UDim2.new(0, 20, 0, 0) -- Akan diatur ulang di addToList
+RemoteName.Size = UDim2.new(0, 134, 0, 26) -- Akan diatur ulang di addToList
+RemoteName.Font = Enum.Font.SourceSans
+RemoteName.Text = "RemoteEvent"
+RemoteName.TextColor3 = colorSettings["RemoteButtons"]["TextColor"]
+RemoteName.TextSize = 16.000
+RemoteName.TextXAlignment = Enum.TextXAlignment.Left
+RemoteName.TextTruncate = Enum.TextTruncate.AtEnd
 
-        OpenInfoFrameButton.Name = "OpenInfoFrameButton"
-        OpenInfoFrameButton.Parent = Header
-        OpenInfoFrameButton.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
-        OpenInfoFrameButton.BorderSizePixel = 0
-        OpenInfoFrameButton.Position = UDim2.new(1, -50, 0, 2)
-        OpenInfoFrameButton.Size = UDim2.new(0, 22, 0, 22)
-        OpenInfoFrameButton.ZIndex = 1003
-        OpenInfoFrameButton.Font = Enum.Font.SourceSans
-        OpenInfoFrameButton.Text = ">"
-        OpenInfoFrameButton.TextColor3 = colorSettings["Main"]["HeaderTextColor"]
-        OpenInfoFrameButton.TextSize = 18.000
-        
-        OpenBrowserButton.Name = "OpenBrowserButton"
-        OpenBrowserButton.Parent = Header
-        OpenBrowserButton.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
-        OpenBrowserButton.BackgroundTransparency = 0.5
-        OpenBrowserButton.BorderSizePixel = 0
-        OpenBrowserButton.Position = UDim2.new(1, -25, 0, 2)
-        OpenBrowserButton.Size = UDim2.new(0, 22, 0, 22)
-        OpenBrowserButton.ZIndex = 1003
-        OpenBrowserButton.Image = "rbxassetid://169476802" 
-        OpenBrowserButton.ImageColor3 = colorSettings["Main"]["HeaderTextColor"]
-        OpenBrowserButton.ScaleType = Enum.ScaleType.Fit
+RemoteIcon.Name = "RemoteIcon"
+RemoteIcon.Parent = RemoteButton
+RemoteIcon.BackgroundTransparency = 1.000
+RemoteIcon.Position = UDim2.new(0.840260386, 0, 0.0225472748, 0)
+RemoteIcon.Size = UDim2.new(0, 24, 0, 24)
+RemoteIcon.Image = eventImage -- Default ke event, akan diubah jika function
 
-        FilterTextBox.Name = "FilterTextBox"
-        FilterTextBox.Parent = mainFrame
-        FilterTextBox.BackgroundColor3 = colorSettings["Main"]["InputBackgroundColor"]
-        FilterTextBox.BorderColor3 = colorSettings["Main"]["InputBorderColor"]
-        FilterTextBox.Position = UDim2.new(0.05, 0, 1, 5) 
-        FilterTextBox.Size = UDim2.new(0.9, 0, 0, 25)
-        FilterTextBox.ZIndex = 1001
-        FilterTextBox.Font = Enum.Font.SourceSans
-        FilterTextBox.PlaceholderText = "Filter berdasarkan nama..."
-        FilterTextBox.TextColor3 = colorSettings["Main"]["InputTextColor"]
-        FilterTextBox.TextSize = 14.000
-        FilterTextBox.ClearTextOnFocus = false
+InfoFrame.Name = "InfoFrame"
+InfoFrame.Parent = mainFrame
+InfoFrame.BackgroundColor3 = colorSettings["Main"]["MainBackgroundColor"]
+InfoFrame.BorderColor3 = colorSettings["Main"]["MainBackgroundColor"]
+InfoFrame.Position = UDim2.new(1.005, 0, 0, 0) -- Diposisikan di kanan mainFrame
+InfoFrame.Size = UDim2.new(0, 357, 0, 322)
+InfoFrame.Visible = false
+InfoFrame.ZIndex = 6
 
-        RemoteScrollFrame.Name = "RemoteScrollFrame"
-        RemoteScrollFrame.Parent = mainFrame
-        RemoteScrollFrame.Active = true
-        RemoteScrollFrame.BackgroundColor3 = colorSettings["Main"]["MainBackgroundColor"]
-        RemoteScrollFrame.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"]
-        RemoteScrollFrame.BorderSizePixel = 1
-        RemoteScrollFrame.Position = UDim2.new(0, 0, 1, 35) 
-        RemoteScrollFrame.Size = UDim2.new(1, 0, 0, 286) 
-        RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollSizeOffset)
-        RemoteScrollFrame.ScrollBarThickness = 8
-        RemoteScrollFrame.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Left
-        RemoteScrollFrame.ScrollBarImageColor3 = colorSettings["Main"]["ScrollBarImageColor"]
-        RemoteScrollFrame.ZIndex = 1000
+InfoFrameHeader.Name = "InfoFrameHeader"
+InfoFrameHeader.Parent = InfoFrame
+InfoFrameHeader.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
+InfoFrameHeader.BorderColor3 = colorSettings["Main"]["HeaderColor"]
+InfoFrameHeader.Size = UDim2.new(0, 357, 0, 26)
+InfoFrameHeader.ZIndex = 14
 
-        RemoteButtonTemplate.Name = "RemoteButtonTemplate"
-        RemoteButtonTemplate.BackgroundColor3 = colorSettings["RemoteButtons"]["BackgroundColor"]
-        RemoteButtonTemplate.BorderColor3 = colorSettings["RemoteButtons"]["BorderColor"]
-        RemoteButtonTemplate.Size = UDim2.new(1, -10, 0, 28) 
-        RemoteButtonTemplate.Font = Enum.Font.SourceSans
-        RemoteButtonTemplate.Text = ""
-        RemoteButtonTemplate.TextColor3 = colorSettings["RemoteButtons"]["TextColor"]
-        RemoteButtonTemplate.TextSize = 1.000 
-        RemoteButtonTemplate.TextWrapped = true
-        RemoteButtonTemplate.TextXAlignment = Enum.TextXAlignment.Left
-        RemoteButtonTemplate.ZIndex = 1001
+InfoTitleShading.Name = "InfoTitleShading"
+InfoTitleShading.Parent = InfoFrame -- Seharusnya InfoFrameHeader
+InfoTitleShading.BackgroundColor3 = colorSettings["Main"]["HeaderShadingColor"]
+InfoTitleShading.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"]
+InfoTitleShading.Position = UDim2.new(0, 0, 0.2, 0) -- Disesuaikan agar di bawah InfoFrameHeader text
+InfoTitleShading.Size = UDim2.new(1, 0, 1, 0) -- Mengisi Parent
+InfoTitleShading.ZIndex = 13
 
-        NumberLabelTemplate.Name = "NumberLabel"
-        NumberLabelTemplate.Parent = RemoteButtonTemplate
-        NumberLabelTemplate.BackgroundTransparency = 1.000
-        NumberLabelTemplate.Position = UDim2.new(0, 5, 0, 0)
-        NumberLabelTemplate.Size = UDim2.new(0, 30, 1, 0) 
-        NumberLabelTemplate.ZIndex = 1002
-        NumberLabelTemplate.Font = Enum.Font.SourceSans
-        NumberLabelTemplate.Text = "1"
-        NumberLabelTemplate.TextColor3 = colorSettings["RemoteButtons"]["NumberTextColor"]
-        NumberLabelTemplate.TextSize = 15.000
-        NumberLabelTemplate.TextXAlignment = Enum.TextXAlignment.Left
+CodeFrame.Name = "CodeFrame"
+CodeFrame.Parent = InfoFrame
+CodeFrame.Active = true
+CodeFrame.BackgroundColor3 = colorSettings["Code"]["BackgroundColor"]
+CodeFrame.BorderColor3 = colorSettings["Code"]["BackgroundColor"]
+CodeFrame.Position = UDim2.new(0.0391303748, 0, 0.141156405, 0)
+CodeFrame.Size = UDim2.new(0, 329, 0, 63)
+CodeFrame.ZIndex = 16
+CodeFrame.CanvasSize = UDim2.new(0, 670, 2, 0)
+CodeFrame.ScrollBarThickness = 8
+CodeFrame.ScrollingDirection = Enum.ScrollingDirection.XY -- Memungkinkan scroll horizontal dan vertikal
+CodeFrame.ScrollBarImageColor3 = colorSettings["Main"]["ScrollBarImageColor"]
 
-        RemoteNameLabelTemplate.Name = "RemoteNameLabel"
-        RemoteNameLabelTemplate.Parent = RemoteButtonTemplate
-        RemoteNameLabelTemplate.BackgroundTransparency = 1.000
-        RemoteNameLabelTemplate.Position = UDim2.new(0, 30, 0, 0) 
-        RemoteNameLabelTemplate.Size = UDim2.new(1, -60, 1, 0) 
-        RemoteNameLabelTemplate.Font = Enum.Font.SourceSansSemibold
-        RemoteNameLabelTemplate.Text = "RemoteEventName"
-        RemoteNameLabelTemplate.TextColor3 = colorSettings["RemoteButtons"]["TextColor"]
-        RemoteNameLabelTemplate.TextSize = 15.000
-        RemoteNameLabelTemplate.TextXAlignment = Enum.TextXAlignment.Left
-        RemoteNameLabelTemplate.TextTruncate = Enum.TextTruncate.AtEnd
+Code.Name = "Code"
+Code.Parent = CodeFrame
+Code.BackgroundTransparency = 1.000
+Code.Position = UDim2.new(0.00888902973, 0, 0.0394801199, 0)
+Code.Size = UDim2.new(0, 100000, 0, 25) -- Lebar besar untuk teks panjang
+Code.ZIndex = 18
+Code.Font = Enum.Font.SourceSans
+Code.Text = "Terima kasih telah menggunakan ZXHELL X ZEDLIST Spy! :D"
+Code.TextColor3 = colorSettings["Code"]["TextColor"]
+Code.TextSize = 14.000
+Code.TextWrapped = false -- Agar bisa scroll horizontal
+Code.TextXAlignment = Enum.TextXAlignment.Left
+Code.ClearTextOnFocus = false -- Mencegah teks terhapus
 
-        RemoteIconTemplate.Name = "RemoteIcon"
-        RemoteIconTemplate.Parent = RemoteButtonTemplate
-        RemoteIconTemplate.BackgroundTransparency = 1.000
-        RemoteIconTemplate.Position = UDim2.new(1, -28, 0.5, -12) 
-        RemoteIconTemplate.Size = UDim2.new(0, 24, 0, 24)
-        RemoteIconTemplate.ZIndex = 1002
-        RemoteIconTemplate.Image = eventImage 
+CodeComment.Name = "CodeComment"
+CodeComment.Parent = CodeFrame
+CodeComment.BackgroundTransparency = 1.000
+CodeComment.Position = UDim2.new(0.0119285434, 0, -0.001968503, 0) -- Seharusnya di atas Code.Text
+CodeComment.Size = UDim2.new(0, 1000, 0, 25)
+CodeComment.ZIndex = 18
+CodeComment.Font = Enum.Font.SourceSans
+CodeComment.Text = "-- Skrip dibuat oleh TurtleSpy, dimodifikasi oleh ZXHELL X ZEDLIST"
+CodeComment.TextColor3 = colorSettings["Code"]["CreditsColor"]
+CodeComment.TextSize = 14.000
+CodeComment.TextXAlignment = Enum.TextXAlignment.Left
 
-        InfoFrame.Name = "InfoFrame"
-        InfoFrame.Parent = mainFrame
-        InfoFrame.BackgroundColor3 = colorSettings["Main"]["InfoScrollingFrameBgColor"]
-        InfoFrame.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"]
-        InfoFrame.BorderSizePixel = 1
-        InfoFrame.Position = UDim2.new(1, 5, 0, 0) 
-        InfoFrame.Size = UDim2.new(0, 380, 1, 0) 
+InfoHeaderText.Name = "InfoHeaderText"
+InfoHeaderText.Parent = InfoFrameHeader -- Dipindahkan ke InfoFrameHeader
+InfoHeaderText.BackgroundTransparency = 1.000
+InfoHeaderText.Position = UDim2.new(0.0391303934, 0, 0, 0) -- Disesuaikan
+InfoHeaderText.Size = UDim2.new(0.9, 0, 1, 0) -- Mengisi header
+InfoHeaderText.ZIndex = 18
+InfoHeaderText.Font = Enum.Font.SourceSans
+InfoHeaderText.Text = "Info: RemoteFunction"
+InfoHeaderText.TextColor3 = colorSettings["Main"]["HeaderTextColor"]
+InfoHeaderText.TextSize = 17.000
+
+InfoButtonsScroll.Name = "InfoButtonsScroll"
+InfoButtonsScroll.Parent = InfoFrame
+InfoButtonsScroll.Active = true
+InfoButtonsScroll.BackgroundColor3 = colorSettings["Main"]["MainBackgroundColor"]
+InfoButtonsScroll.BorderColor3 = colorSettings["Main"]["MainBackgroundColor"]
+InfoButtonsScroll.Position = UDim2.new(0.0391303748, 0, 0.355857909, 0)
+InfoButtonsScroll.Size = UDim2.new(0, 329, 0, 199)
+InfoButtonsScroll.ZIndex = 11
+InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 1, 0) -- Akan disesuaikan
+InfoButtonsScroll.ScrollBarThickness = 8
+InfoButtonsScroll.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Left
+InfoButtonsScroll.ScrollBarImageColor3 = colorSettings["Main"]["ScrollBarImageColor"]
+
+-- Helper untuk membuat tombol info
+local function createInfoButton(name, text, yOffset)
+    local button = Instance.new("TextButton")
+    button.Name = name
+    button.Parent = InfoButtonsScroll
+    button.BackgroundColor3 = colorSettings["MainButtons"]["BackgroundColor"]
+    button.BorderColor3 = colorSettings["MainButtons"]["BorderColor"]
+    button.Position = UDim2.new(0.0645, 0, 0, yOffset)
+    button.Size = UDim2.new(0, 294, 0, 26)
+    button.ZIndex = 15
+    button.Font = Enum.Font.SourceSans
+    button.Text = text
+    button.TextColor3 = colorSettings["MainButtons"]["TextColor"]
+    button.TextSize = 16.000
+    return button
+end
+
+CopyCode = createInfoButton("CopyCode", "Salin kode", 10)
+RunCode = createInfoButton("RunCode", "Eksekusi", 45)
+CopyScriptPath = createInfoButton("CopyScriptPath", "Salin path skrip", 80)
+CopyDecompiled = createInfoButton("CopyDecompiled", "Salin skrip dekompilasi", 115)
+DoNotStack = createInfoButton("DoNotStack", "Jangan stack remote saat arg baru", 150)
+IgnoreRemote = createInfoButton("IgnoreRemote", "Abaikan remote", 185)
+BlockRemote = createInfoButton("BlockRemote", "Blokir remote", 220)
+Clear = createInfoButton("Clear", "Bersihkan log", 255)
+WhileLoop = createInfoButton("WhileLoop", "Buat skrip while loop", 290)
+CopyReturn = createInfoButton("CopyReturn", "Eksekusi & salin nilai return", 325)
+
+-- Sesuaikan CanvasSize InfoButtonsScroll berdasarkan tombol terakhir
+InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 0, CopyReturn.Position.Y.Offset + CopyReturn.Size.Y.Offset + 10)
+
+
+FrameDivider.Name = "FrameDivider"
+FrameDivider.Parent = InfoFrame
+FrameDivider.BackgroundColor3 = colorSettings["Main"]["HeaderShadingColor"] -- Warna baru
+FrameDivider.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"] -- Warna baru
+FrameDivider.Position = UDim2.new(0, 0, 0, 0) -- Di sisi kiri InfoFrame
+FrameDivider.Size = UDim2.new(0, 4, 1, 0) -- Tinggi penuh
+FrameDivider.ZIndex = 7
+
+local InfoFrameOpen = false
+CloseInfoFrame.Name = "CloseInfoFrame"
+CloseInfoFrame.Parent = InfoFrameHeader -- Dipindahkan ke InfoFrameHeader agar selalu terlihat
+CloseInfoFrame.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
+CloseInfoFrame.BorderColor3 = colorSettings["Main"]["HeaderColor"]
+CloseInfoFrame.Position = UDim2.new(1, -24, 0, 2) -- Pojok kanan atas
+CloseInfoFrame.Size = UDim2.new(0, 22, 0, 22)
+CloseInfoFrame.ZIndex = 18
+CloseInfoFrame.Font = Enum.Font.SourceSansLight
+CloseInfoFrame.Text = "X"
+CloseInfoFrame.TextColor3 = colorSettings["Main"]["HeaderTextColor"] -- Warna baru
+CloseInfoFrame.TextSize = 20.000
+CloseInfoFrame.MouseButton1Click:Connect(function()
+    InfoFrame.Visible = false
+    InfoFrameOpen = false
+    mainFrame.Size = UDim2.new(0, 207, 0, 35)
+    OpenInfoFrame.Text = ">" -- Kembalikan teks tombol Open
+end)
+
+OpenInfoFrame.Name = "OpenInfoFrame"
+OpenInfoFrame.Parent = Header -- Dipindahkan ke Header utama
+OpenInfoFrame.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
+OpenInfoFrame.BorderColor3 = colorSettings["Main"]["HeaderColor"]
+OpenInfoFrame.Position = UDim2.new(1, -24, 0, 2) -- Pojok kanan atas Header
+OpenInfoFrame.Size = UDim2.new(0, 22, 0, 22)
+OpenInfoFrame.ZIndex = 18
+OpenInfoFrame.Font = Enum.Font.SourceSans
+OpenInfoFrame.Text = ">"
+OpenInfoFrame.TextColor3 = colorSettings["Main"]["HeaderTextColor"] -- Warna baru
+OpenInfoFrame.TextSize = 16.000
+OpenInfoFrame.MouseButton1Click:Connect(function()
+	if not InfoFrame.Visible then
+		mainFrame.Size = UDim2.new(0, 207 + InfoFrame.Size.X.Offset, 0, 35) -- Lebar dinamis
+		OpenInfoFrame.Text = "<"
+        InfoFrame.Visible = true
+	else
+		mainFrame.Size = UDim2.new(0, 207, 0, 35)
+		OpenInfoFrame.Text = ">"
         InfoFrame.Visible = false
-        InfoFrame.ZIndex = 999 
-        InfoFrame.ClipsDescendants = true
+	end
+	InfoFrameOpen = not InfoFrameOpen
+end)
 
-        InfoFrameHeader.Name = "InfoFrameHeader"
-        InfoFrameHeader.Parent = InfoFrame
-        InfoFrameHeader.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
-        InfoFrameHeader.BorderSizePixel = 0
-        InfoFrameHeader.Size = UDim2.new(1, 0, 0, 26)
-        InfoFrameHeader.ZIndex = 1011
+Minimize.Name = "Minimize"
+Minimize.Parent = Header -- Dipindahkan ke Header utama
+Minimize.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
+Minimize.BorderColor3 = colorSettings["Main"]["HeaderColor"]
+Minimize.Position = UDim2.new(1, -48, 0, 2) -- Di sebelah kiri OpenInfoFrame
+Minimize.Size = UDim2.new(0, 22, 0, 22)
+Minimize.ZIndex = 18
+Minimize.Font = Enum.Font.SourceSans
+Minimize.Text = "_"
+Minimize.TextColor3 = colorSettings["Main"]["HeaderTextColor"] -- Warna baru
+Minimize.TextSize = 16.000
+Minimize.MouseButton1Click:Connect(function()
+    triggerGlitch() -- Panggil efek glitch saat minimize
+	if RemoteScrollFrame.Visible then
+		mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset, 0, 35) -- Pertahankan lebar saat ini jika InfoFrame terbuka
+        RemoteScrollFrame.Visible = false
+        -- Jangan sembunyikan InfoFrame otomatis, biarkan user yang kontrol via OpenInfoFrame
+	else
+        RemoteScrollFrame.Visible = true
+		if InfoFrameOpen then
+		    mainFrame.Size = UDim2.new(0, 207 + InfoFrame.Size.X.Offset, 0, RemoteScrollFrame.Size.Y.Offset + Header.Size.Y.Offset + 5)
+		else
+			mainFrame.Size = UDim2.new(0, 207, 0, RemoteScrollFrame.Size.Y.Offset + Header.Size.Y.Offset + 5)
+		end
+	end
+end)
 
-        InfoTitleShading.Name = "InfoTitleShading" 
-        InfoTitleShading.Parent = InfoFrameHeader
-        InfoTitleShading.BackgroundColor3 = colorSettings["Main"]["HeaderShadingColor"]
-        InfoTitleShading.BorderSizePixel = 0
-        InfoTitleShading.Position = UDim2.new(0,0,1,-1)
-        InfoTitleShading.Size = UDim2.new(1, 0, 0, 1)
-        InfoTitleShading.ZIndex = 1010
-
-        InfoHeaderText.Name = "InfoHeaderText"
-        InfoHeaderText.Parent = InfoFrameHeader
-        InfoHeaderText.BackgroundTransparency = 1.000
-        InfoHeaderText.Size = UDim2.new(1, -30, 1, 0)
-        InfoHeaderText.Position = UDim2.new(0,5,0,0)
-        InfoHeaderText.ZIndex = 1012
-        InfoHeaderText.Font = Enum.Font.SourceSansSemibold
-        InfoHeaderText.Text = "Info: RemoteName"
-        InfoHeaderText.TextColor3 = colorSettings["Main"]["HeaderTextColor"]
-        InfoHeaderText.TextSize = 16.000
-        InfoHeaderText.TextXAlignment = Enum.TextXAlignment.Left
-
-        CloseInfoFrameButton.Name = "CloseInfoFrameButton"
-        CloseInfoFrameButton.Parent = InfoFrameHeader
-        CloseInfoFrameButton.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
-        CloseInfoFrameButton.BorderSizePixel = 0
-        CloseInfoFrameButton.Position = UDim2.new(1, -25, 0, 2)
-        CloseInfoFrameButton.Size = UDim2.new(0, 22, 0, 22)
-        CloseInfoFrameButton.ZIndex = 1013
-        CloseInfoFrameButton.Font = Enum.Font.SourceSansLight
-        CloseInfoFrameButton.Text = "X"
-        CloseInfoFrameButton.TextColor3 = colorSettings["Main"]["HeaderTextColor"]
-        CloseInfoFrameButton.TextSize = 20.000
-
-        CodeFrame.Name = "CodeFrame"
-        CodeFrame.Parent = InfoFrame
-        CodeFrame.Active = true
-        CodeFrame.BackgroundColor3 = colorSettings["Code"]["BackgroundColor"]
-        CodeFrame.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"]
-        CodeFrame.BorderSizePixel = 1
-        CodeFrame.Position = UDim2.new(0.025, 0, 0, 30)
-        CodeFrame.Size = UDim2.new(0.95, 0, 0, 65)
-        CodeFrame.ZIndex = 1010
-        CodeFrame.CanvasSize = UDim2.new(2, 0, 1, 0) 
-        CodeFrame.ScrollBarThickness = 6
-        CodeFrame.ScrollingDirection = Enum.ScrollingDirection.X
-        CodeFrame.ScrollBarImageColor3 = colorSettings["Main"]["ScrollBarImageColor"]
-
-        CodeCommentTextLabel.Name = "CodeCommentTextLabel"
-        CodeCommentTextLabel.Parent = CodeFrame
-        CodeCommentTextLabel.BackgroundTransparency = 1.000
-        CodeCommentTextLabel.Position = UDim2.new(0, 5, 0, 2)
-        CodeCommentTextLabel.Size = UDim2.new(0, 10000, 0, 18) 
-        CodeCommentTextLabel.ZIndex = 1011
-        CodeCommentTextLabel.Font = Enum.Font.Code 
-        CodeCommentTextLabel.Text = "-- Script generated by TurtleSpy V2, enhanced by Gemini. Original by Intrer#0421"
-        CodeCommentTextLabel.TextColor3 = colorSettings["Code"]["CreditsColor"]
-        CodeCommentTextLabel.TextSize = 13.000
-        CodeCommentTextLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-        CodeTextLabel.Name = "CodeTextLabel"
-        CodeTextLabel.Parent = CodeFrame
-        CodeTextLabel.BackgroundTransparency = 1.000
-        CodeTextLabel.Position = UDim2.new(0, 5, 0, 20)
-        CodeTextLabel.Size = UDim2.new(0, 10000, 0, 40) 
-        CodeTextLabel.ZIndex = 1011
-        CodeTextLabel.Font = Enum.Font.Code
-        CodeTextLabel.Text = "game:GetService('ReplicatedStorage').RemoteEvent:FireServer(...)"
-        CodeTextLabel.TextColor3 = colorSettings["Code"]["TextColor"]
-        CodeTextLabel.TextSize = 14.000
-        CodeTextLabel.TextWrapped = false 
-        CodeTextLabel.TextXAlignment = Enum.TextXAlignment.Left
-        CodeTextLabel.ClipsDescendants = false
-
-        ArgumentEditorFrame.Name = "ArgumentEditorFrame"
-        ArgumentEditorFrame.Parent = InfoFrame
-        ArgumentEditorFrame.BackgroundColor3 = colorSettings["Code"]["BackgroundColor"]
-        ArgumentEditorFrame.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"]
-        ArgumentEditorFrame.BorderSizePixel = 1
-        ArgumentEditorFrame.Position = UDim2.new(0.025, 0, 0, 100) 
-        ArgumentEditorFrame.Size = UDim2.new(0.95, 0, 0, 100) 
-        ArgumentEditorFrame.ZIndex = 1010
-        ArgumentEditorFrame.Visible = true 
-
-        ArgumentEditorLabel.Name = "ArgumentEditorLabel"
-        ArgumentEditorLabel.Parent = ArgumentEditorFrame
-        ArgumentEditorLabel.BackgroundTransparency = 1.0
-        ArgumentEditorLabel.Size = UDim2.new(1, -10, 0, 20)
-        ArgumentEditorLabel.Position = UDim2.new(0, 5, 0, 0)
-        ArgumentEditorLabel.Font = Enum.Font.SourceSansSemibold
-        ArgumentEditorLabel.Text = "Edit Argumen (format Lua table):"
-        ArgumentEditorLabel.TextColor3 = colorSettings["Code"]["TextColor"]
-        ArgumentEditorLabel.TextSize = 14.000
-        ArgumentEditorLabel.TextXAlignment = Enum.TextXAlignment.Left
-        ArgumentEditorLabel.ZIndex = 1011
-
-        ArgumentEditorTextBox.Name = "ArgumentEditorTextBox"
-        ArgumentEditorTextBox.Parent = ArgumentEditorFrame
-        ArgumentEditorTextBox.BackgroundColor3 = colorSettings["Main"]["InputBackgroundColor"]
-        ArgumentEditorTextBox.BorderColor3 = colorSettings["Main"]["InputBorderColor"]
-        ArgumentEditorTextBox.Position = UDim2.new(0.025, 0, 0, 20)
-        ArgumentEditorTextBox.Size = UDim2.new(0.95, 0, 1, -50) 
-        ArgumentEditorTextBox.ZIndex = 1011
-        ArgumentEditorTextBox.Font = Enum.Font.Code
-        ArgumentEditorTextBox.Text = "{}"
-        ArgumentEditorTextBox.TextColor3 = colorSettings["Main"]["InputTextColor"]
-        ArgumentEditorTextBox.TextSize = 13.000
-        ArgumentEditorTextBox.TextWrapped = true
-        ArgumentEditorTextBox.TextXAlignment = Enum.TextXAlignment.Left
-        ArgumentEditorTextBox.TextYAlignment = Enum.TextYAlignment.Top
-        ArgumentEditorTextBox.MultiLine = true
-        ArgumentEditorTextBox.ClearTextOnFocus = false
-
-        ApplyArgumentsButton.Name = "ApplyArgumentsButton"
-        ApplyArgumentsButton.Parent = ArgumentEditorFrame
-        ApplyArgumentsButton.BackgroundColor3 = colorSettings["MainButtons"]["BackgroundColor"]
-        ApplyArgumentsButton.BorderColor3 = colorSettings["MainButtons"]["BorderColor"]
-        ApplyArgumentsButton.Position = UDim2.new(0.5, -50, 1, -28) 
-        ApplyArgumentsButton.Size = UDim2.new(0, 100, 0, 22)
-        ApplyArgumentsButton.ZIndex = 1012
-        ApplyArgumentsButton.Font = Enum.Font.SourceSans
-        ApplyArgumentsButton.Text = "Terapkan & Jalankan"
-        ApplyArgumentsButton.TextColor3 = colorSettings["MainButtons"]["TextColor"]
-        ApplyArgumentsButton.TextSize = 13.000
-
-        InfoButtonsScroll.Name = "InfoButtonsScroll"
-        InfoButtonsScroll.Parent = InfoFrame
-        InfoButtonsScroll.Active = true
-        InfoButtonsScroll.BackgroundColor3 = colorSettings["Main"]["InfoScrollingFrameBgColor"]
-        InfoButtonsScroll.BorderSizePixel = 0
-        InfoButtonsScroll.Position = UDim2.new(0.025, 0, 0, 205) 
-        InfoButtonsScroll.Size = UDim2.new(0.95, 0, 1, -210) 
-        InfoButtonsScroll.ZIndex = 1009
-        InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 2, 0) 
-        InfoButtonsScroll.ScrollBarThickness = 8
-        InfoButtonsScroll.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Left
-        InfoButtonsScroll.ScrollBarImageColor3 = colorSettings["Main"]["ScrollBarImageColor"]
-
-        local buttonYOffset = 10
-        local buttonHeight = 28
-        local buttonSpacing = 8
-
-        local function createInfoButton(name, text, yPos)
-            local button = Instance.new("TextButton")
-            button.Name = name
-            button.Parent = InfoButtonsScroll
-            button.BackgroundColor3 = colorSettings["MainButtons"]["BackgroundColor"]
-            button.BorderColor3 = colorSettings["MainButtons"]["BorderColor"]
-            button.Position = UDim2.new(0.05, 0, 0, yPos)
-            button.Size = UDim2.new(0.9, 0, 0, buttonHeight)
-            button.ZIndex = 1010
-            button.Font = Enum.Font.SourceSans
-            button.Text = text
-            button.TextColor3 = colorSettings["MainButtons"]["TextColor"]
-            button.TextSize = 14.000
-            return button
-        end
-
-        CopyCodeButton = createInfoButton("CopyCodeButton", "Salin Kode", buttonYOffset)
-        buttonYOffset = buttonYOffset + buttonHeight + buttonSpacing
-        RunCodeButton = createInfoButton("RunCodeButton", "Jalankan Kode Asli", buttonYOffset) 
-        buttonYOffset = buttonYOffset + buttonHeight + buttonSpacing
-        CopyScriptPathButton = createInfoButton("CopyScriptPathButton", "Salin Path Script Pemanggil", buttonYOffset)
-        buttonYOffset = buttonYOffset + buttonHeight + buttonSpacing
-        CopyDecompiledButton = createInfoButton("CopyDecompiledButton", "Salin Script Decompiled", buttonYOffset)
-        buttonYOffset = buttonYOffset + buttonHeight + buttonSpacing
-        CopyFullPathButton = createInfoButton("CopyFullPathButton", "Salin Path Instance Remote", buttonYOffset)
-        buttonYOffset = buttonYOffset + buttonHeight + buttonSpacing
-        IgnoreRemoteButton = createInfoButton("IgnoreRemoteButton", "Abaikan Remote Ini", buttonYOffset)
-        buttonYOffset = buttonYOffset + buttonHeight + buttonSpacing
-        BlockRemoteButton = createInfoButton("BlockRemoteButton", "Blokir Remote Ini", buttonYOffset)
-        buttonYOffset = buttonYOffset + buttonHeight + buttonSpacing
-        UnstackRemoteButton = createInfoButton("UnstackRemoteButton", "Unstack Remote (Argumen Baru)", buttonYOffset)
-        buttonYOffset = buttonYOffset + buttonHeight + buttonSpacing
-        WhileLoopButton = createInfoButton("WhileLoopButton", "Buat Skrip While Loop", buttonYOffset)
-        buttonYOffset = buttonYOffset + buttonHeight + buttonSpacing
-        CopyReturnValueButton = createInfoButton("CopyReturnValueButton", "Jalankan & Salin Return (Fungsi)", buttonYOffset)
-        CopyReturnValueButton.Visible = false 
-        
-        local globalButtonY = 5
-        ClearLogsButton.Name = "ClearLogsButton"
-        ClearLogsButton.Parent = mainFrame
-        ClearLogsButton.BackgroundColor3 = colorSettings["MainButtons"]["BackgroundColor"]
-        ClearLogsButton.BorderColor3 = colorSettings["MainButtons"]["BorderColor"]
-        ClearLogsButton.Position = UDim2.new(0.05, 0, 1, RemoteScrollFrame.Size.Y.Offset + FilterTextBox.Size.Y.Offset + globalButtonY + 40)
-        ClearLogsButton.Size = UDim2.new(0.425, -5, 0, 25)
-        ClearLogsButton.ZIndex = 1001
-        ClearLogsButton.Font = Enum.Font.SourceSans
-        ClearLogsButton.Text = "Bersihkan Log"
-        ClearLogsButton.TextColor3 = colorSettings["MainButtons"]["TextColor"]
-        ClearLogsButton.TextSize = 13.000
-
-        UnstackAllButton.Name = "UnstackAllButton"
-        UnstackAllButton.Parent = mainFrame
-        UnstackAllButton.BackgroundColor3 = colorSettings["MainButtons"]["BackgroundColor"]
-        UnstackAllButton.BorderColor3 = colorSettings["MainButtons"]["BorderColor"]
-        UnstackAllButton.Position = UDim2.new(0.525, 0, 1, RemoteScrollFrame.Size.Y.Offset + FilterTextBox.Size.Y.Offset + globalButtonY + 40)
-        UnstackAllButton.Size = UDim2.new(0.425, -5, 0, 25)
-        UnstackAllButton.ZIndex = 1001
-        UnstackAllButton.Font = Enum.Font.SourceSans
-        UnstackAllButton.Text = "Unstack Semua"
-        UnstackAllButton.TextColor3 = colorSettings["MainButtons"]["TextColor"]
-        UnstackAllButton.TextSize = 13.000
-        
-        globalButtonY = globalButtonY + 25 + 5
-
-        SaveSessionButton.Name = "SaveSessionButton"
-        SaveSessionButton.Parent = mainFrame
-        SaveSessionButton.BackgroundColor3 = colorSettings["MainButtons"]["BackgroundColor"]
-        SaveSessionButton.BorderColor3 = colorSettings["MainButtons"]["BorderColor"]
-        SaveSessionButton.Position = UDim2.new(0.05, 0, 1, RemoteScrollFrame.Size.Y.Offset + FilterTextBox.Size.Y.Offset + globalButtonY + 40)
-        SaveSessionButton.Size = UDim2.new(0.425, -5, 0, 25)
-        SaveSessionButton.ZIndex = 1001
-        SaveSessionButton.Font = Enum.Font.SourceSans
-        SaveSessionButton.Text = "Simpan Sesi"
-        SaveSessionButton.TextColor3 = colorSettings["MainButtons"]["TextColor"]
-        SaveSessionButton.TextSize = 13.000
-
-        LoadSessionButton.Name = "LoadSessionButton"
-        LoadSessionButton.Parent = mainFrame
-        LoadSessionButton.BackgroundColor3 = colorSettings["MainButtons"]["BackgroundColor"]
-        LoadSessionButton.BorderColor3 = colorSettings["MainButtons"]["BorderColor"]
-        LoadSessionButton.Position = UDim2.new(0.525, 0, 1, RemoteScrollFrame.Size.Y.Offset + FilterTextBox.Size.Y.Offset + globalButtonY + 40)
-        LoadSessionButton.Size = UDim2.new(0.425, -5, 0, 25)
-        LoadSessionButton.ZIndex = 1001
-        LoadSessionButton.Font = Enum.Font.SourceSans
-        LoadSessionButton.Text = "Muat Sesi"
-        LoadSessionButton.TextColor3 = colorSettings["MainButtons"]["TextColor"]
-        LoadSessionButton.TextSize = 13.000
-
-        globalButtonY = globalButtonY + 25 + 10 
-
-        HookSettingsFrame.Name = "HookSettingsFrame"
-        HookSettingsFrame.Parent = mainFrame
-        HookSettingsFrame.BackgroundTransparency = 1.0
-        HookSettingsFrame.Position = UDim2.new(0.05, 0, 1, RemoteScrollFrame.Size.Y.Offset + FilterTextBox.Size.Y.Offset + globalButtonY + 40)
-        HookSettingsFrame.Size = UDim2.new(0.9, 0, 0, 30)
-        HookSettingsFrame.ZIndex = 1001
-        local ListLayout = Instance.new("UIListLayout", HookSettingsFrame)
-        ListLayout.FillDirection = Enum.FillDirection.Horizontal
-        ListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        ListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-        ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        ListLayout.Padding = UDim.new(0, 5)
-
-        local function createHookToggleButton(name, text, initialActive)
-            local button = Instance.new("TextButton")
-            button.Name = name
-            button.Parent = HookSettingsFrame
-            button.BackgroundColor3 = initialActive and Color3.fromRGB(76, 209, 55) or colorSettings["MainButtons"]["BackgroundColor"]
-            button.BorderColor3 = colorSettings["MainButtons"]["BorderColor"]
-            button.Size = UDim2.new(0.31, 0, 1, 0) 
-            button.Font = Enum.Font.SourceSans
-            button.Text = text .. (initialActive and " (Aktif)" or " (Nonaktif)")
-            button.TextColor3 = colorSettings["MainButtons"]["TextColor"]
-            button.TextSize = 11.000
-            button.ZIndex = 1002
-            button._isActive = initialActive 
-            return button
-        end
-
-        ToggleFireServerHookButton = createHookToggleButton("ToggleFireServerHook", "FireServer", true)
-        ToggleInvokeServerHookButton = createHookToggleButton("ToggleInvokeServerHook", "InvokeServer", true)
-        ToggleNamecallHookButton = createHookToggleButton("ToggleNamecallHook", "Namecall", true)
-        
-        local totalBottomUIHeight = FilterTextBox.Size.Y.Offset + 5 + RemoteScrollFrame.Size.Y.Offset + 5 + ClearLogsButton.Size.Y.Offset + 5 + SaveSessionButton.Size.Y.Offset + 5 + HookSettingsFrame.Size.Y.Offset + 10
-        mainFrame.Size = UDim2.new(0, 220, 0, 35 + totalBottomUIHeight) 
-        RemoteScrollFrame.Size = UDim2.new(1,0,0, mainFrame.Size.Y.Offset - (35 + FilterTextBox.Size.Y.Offset + 5 + ClearLogsButton.Size.Y.Offset + 5 + SaveSessionButton.Size.Y.Offset + 5 + HookSettingsFrame.Size.Y.Offset + 10))
-
-        BrowserHeader.Name = "BrowserHeader"
-        BrowserHeader.Parent = TurtleSpyGUI
-        BrowserHeader.BackgroundColor3 = colorSettings["Main"]["HeaderShadingColor"]
-        BrowserHeader.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"]
-        BrowserHeader.Position = UDim2.new(0.5, -103, 0.1, 0) 
-        BrowserHeader.Size = UDim2.new(0, 207, 0, 33)
-        BrowserHeader.ZIndex = 1999
-        BrowserHeader.Active = true
-        BrowserHeader.Draggable = true
-        BrowserHeader.Visible = false 
-
-        BrowserHeaderFrame.Name = "BrowserHeaderFrame"
-        BrowserHeaderFrame.Parent = BrowserHeader
-        BrowserHeaderFrame.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
-        BrowserHeaderFrame.BorderSizePixel = 0
-        BrowserHeaderFrame.Size = UDim2.new(1, 0, 0, 26)
-        BrowserHeaderFrame.ZIndex = 2000
-
-        BrowserHeaderText.Name = "BrowserHeaderText"
-        BrowserHeaderText.Parent = BrowserHeaderFrame
-        BrowserHeaderText.BackgroundTransparency = 1.000
-        BrowserHeaderText.Size = UDim2.new(1, -30, 1, 0)
-        BrowserHeaderText.Position = UDim2.new(0,5,0,0)
-        BrowserHeaderText.ZIndex = 2001
-        BrowserHeaderText.Font = Enum.Font.SourceSansSemibold
-        BrowserHeaderText.Text = "Remote Browser"
-        BrowserHeaderText.TextColor3 = colorSettings["Main"]["HeaderTextColor"]
-        BrowserHeaderText.TextSize = 16.000
-        BrowserHeaderText.TextXAlignment = Enum.TextXAlignment.Left
-
-        CloseBrowserButton.Name = "CloseBrowserButton"
-        CloseBrowserButton.Parent = BrowserHeaderFrame
-        CloseBrowserButton.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
-        CloseBrowserButton.BorderSizePixel = 0
-        CloseBrowserButton.Position = UDim2.new(1, -25, 0, 2)
-        CloseBrowserButton.Size = UDim2.new(0, 22, 0, 22)
-        CloseBrowserButton.ZIndex = 2002
-        CloseBrowserButton.Font = Enum.Font.SourceSansLight
-        CloseBrowserButton.Text = "X"
-        CloseBrowserButton.TextColor3 = colorSettings["Main"]["HeaderTextColor"]
-        CloseBrowserButton.TextSize = 20.000
-
-        RemoteBrowserFrame.Name = "RemoteBrowserFrame"
-        RemoteBrowserFrame.Parent = BrowserHeader
-        RemoteBrowserFrame.Active = true
-        RemoteBrowserFrame.BackgroundColor3 = colorSettings["Main"]["MainBackgroundColor"]
-        RemoteBrowserFrame.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"]
-        RemoteBrowserFrame.BorderSizePixel = 1
-        RemoteBrowserFrame.Position = UDim2.new(0, 0, 1, 0)
-        RemoteBrowserFrame.Size = UDim2.new(1, 0, 0, 286)
-        RemoteBrowserFrame.ZIndex = 1998
-        RemoteBrowserFrame.CanvasSize = UDim2.new(0, 0, 0, 287)
-        RemoteBrowserFrame.ScrollBarThickness = 8
-        RemoteBrowserFrame.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Left
-        RemoteBrowserFrame.ScrollBarImageColor3 = colorSettings["Main"]["ScrollBarImageColor"]
-
-        RemoteButtonBrowserTemplate.Name = "RemoteButtonBrowserTemplate"
-        RemoteButtonBrowserTemplate.BackgroundColor3 = colorSettings["RemoteButtons"]["BackgroundColor"]
-        RemoteButtonBrowserTemplate.BorderColor3 = colorSettings["RemoteButtons"]["BorderColor"]
-        RemoteButtonBrowserTemplate.Size = UDim2.new(1, -10, 0, 28)
-        RemoteButtonBrowserTemplate.Font = Enum.Font.SourceSans
-        RemoteButtonBrowserTemplate.Text = ""
-        RemoteButtonBrowserTemplate.ZIndex = 2000
-
-        RemoteNameBrowserTemplate.Name = "RemoteNameBrowserLabel"
-        RemoteNameBrowserTemplate.Parent = RemoteButtonBrowserTemplate
-        RemoteNameBrowserTemplate.BackgroundTransparency = 1.000
-        RemoteNameBrowserTemplate.Position = UDim2.new(0, 5, 0, 0)
-        RemoteNameBrowserTemplate.Size = UDim2.new(1, -35, 1, 0)
-        RemoteNameBrowserTemplate.ZIndex = 2001
-        RemoteNameBrowserTemplate.Font = Enum.Font.SourceSans
-        RemoteNameBrowserTemplate.Text = "RemoteEventName"
-        RemoteNameBrowserTemplate.TextColor3 = colorSettings["RemoteButtons"]["TextColor"]
-        RemoteNameBrowserTemplate.TextSize = 15.000
-        RemoteNameBrowserTemplate.TextXAlignment = Enum.TextXAlignment.Left
-        RemoteNameBrowserTemplate.TextTruncate = Enum.TextTruncate.AtEnd
-
-        RemoteIconBrowserTemplate.Name = "RemoteIconBrowser"
-        RemoteIconBrowserTemplate.Parent = RemoteButtonBrowserTemplate
-        RemoteIconBrowserTemplate.BackgroundTransparency = 1.000
-        RemoteIconBrowserTemplate.Position = UDim2.new(1, -28, 0.5, -12)
-        RemoteIconBrowserTemplate.Size = UDim2.new(0, 24, 0, 24)
-        RemoteIconBrowserTemplate.ZIndex = 2001
-        RemoteIconBrowserTemplate.Image = eventImage
-        print("TurtleSpy: CreateUI() selesai.")
-    end)
-end
-CreateUI() 
-
--- Variabel Status GUI
-local isInfoFrameOpen = false
-local isMainFrameMinimized = false
-local currentRemoteLookingAt = nil 
-local currentRemoteDataKey = nil 
-
--- Fungsi Utilitas GUI
-local function IsValid(instance) 
-    return instance and pcall(function() return instance.Parent end) -- Cara lebih aman untuk cek Parent
-end
-
-local function ButtonEffect(button, text, success)
-    if not button or not IsValid(button) then return end
-    local originalText = button.Text
-    local originalColor = button.TextColor3
-    local originalBgColor = button.BackgroundColor3
-
-    button.Text = text or "Berhasil!"
-    if success == true then
-        button.TextColor3 = Color3.fromRGB(255, 255, 255)
-        button.BackgroundColor3 = Color3.fromRGB(76, 209, 55) 
-    elseif success == false then
-        button.TextColor3 = Color3.fromRGB(255, 255, 255)
-        button.BackgroundColor3 = Color3.fromRGB(232, 65, 24) 
-    else 
-        button.TextColor3 = Color3.fromRGB(76, 209, 55) 
+local function FindRemote(remote, args)
+    local currentId = (get_thread_context or syn.get_thread_identity)()
+    local originalIdentity = currentId
+    if syn and syn.set_thread_identity then -- Hanya jika Synapse
+        syn.set_thread_identity(7)
+    elseif get_thread_context and set_thread_context then -- Untuk exploit lain yang mendukung
+        set_thread_context(7)
     end
+
+    local foundIndex
+    if table.find(unstacked, remote) then
+        for b, v_remote in ipairs(remotes) do -- Menggunakan ipairs untuk array
+            if v_remote == remote then
+                -- Perbandingan argumen yang lebih aman
+                local argsMatch = true
+                if #remoteArgs[b] == #args then
+                    for i_arg = 1, #args do
+                        if remoteArgs[b][i_arg] ~= args[i_arg] then
+                            argsMatch = false
+                            break
+                        end
+                    end
+                else
+                    argsMatch = false
+                end
+
+                if argsMatch then
+                    foundIndex = b
+                    break
+                end
+            end
+        end
+    else
+        for i, r in ipairs(remotes) do
+            if r == remote then
+                foundIndex = i
+                break
+            end
+        end
+    end
+
+    if syn and syn.set_thread_identity then
+        syn.set_thread_identity(originalIdentity)
+    elseif get_thread_context and set_thread_context then
+        set_thread_context(originalIdentity)
+    end
+    return foundIndex
+end
+
+local function ButtonEffect(textlabel, text, successColor)
+    if not textlabel or not textlabel:IsA("TextButton") then return end -- Pemeriksaan keamanan
     
-    task.delay(1.2, function() -- Menggunakan task.delay
-        if button and IsValid(button) then
-            button.Text = originalText
-            button.TextColor3 = originalColor
-            button.BackgroundColor3 = originalBgColor
+    local orgText = textlabel.Text
+    local orgColor = textlabel.TextColor3
+    textlabel.Text = text or "Disalin!"
+    textlabel.TextColor3 = successColor or Color3.fromRGB(76, 209, 55) -- Hijau default
+    
+    task.delay(0.8, function()
+        if textlabel and textlabel.Parent then -- Pastikan masih ada
+            textlabel.Text = orgText
+            textlabel.TextColor3 = orgColor
         end
     end)
 end
 
-local function UpdateInfoFrame(remoteInstance, dataKey)
-    if not remoteInstance or not IsValid(remoteInstance) or not remoteData[dataKey] then
-        if InfoFrame and IsValid(InfoFrame) then InfoFrame.Visible = false end
-        isInfoFrameOpen = false
-        if OpenInfoFrameButton and IsValid(OpenInfoFrameButton) then OpenInfoFrameButton.Text = ">" end
-        currentRemoteLookingAt = nil
-        currentRemoteDataKey = nil
+local lookingAt
+local lookingAtArgs
+local lookingAtButton
+
+CopyCode.MouseButton1Click:Connect(function()
+    if not lookingAt then return end
+    local codeToCopy = CodeComment.Text.. "\n\n"..Code.Text
+    local success, err = pcall(setclipboard, codeToCopy)
+    if success then
+        ButtonEffect(CopyCode)
+    else
+        warn("Gagal menyalin kode:", err)
+        ButtonEffect(CopyCode, "Gagal Salin!", Color3.fromRGB(230,0,0))
+    end
+end)
+
+RunCode.MouseButton1Click:Connect(function()
+    if lookingAt and lookingAtArgs then -- Pastikan lookingAtArgs juga ada
+        local success, err
+        if isA(lookingAt, "RemoteFunction") then
+            success, err = pcall(function() lookingAt:InvokeServer(table.unpack(lookingAtArgs)) end)
+        elseif isA(lookingAt, "RemoteEvent") then
+            success, err = pcall(function() lookingAt:FireServer(table.unpack(lookingAtArgs)) end)
+        end
+        if not success then
+            warn("Gagal mengeksekusi remote:", err)
+            ButtonEffect(RunCode, "Gagal Eksekusi!", Color3.fromRGB(230,0,0))
+        else
+             ButtonEffect(RunCode, "Dieksekusi!", Color3.fromRGB(76, 209, 55))
+        end
+    end
+end)
+
+CopyScriptPath.MouseButton1Click:Connect(function()
+    local remoteIndex = FindRemote(lookingAt, lookingAtArgs)
+    if remoteIndex and remoteScripts[remoteIndex] then
+        local scriptPath = GetFullPathOfAnInstance(remoteScripts[remoteIndex])
+        local success, err = pcall(setclipboard, scriptPath)
+        if success then
+            ButtonEffect(CopyScriptPath)
+        else
+            warn("Gagal menyalin path skrip:", err)
+            ButtonEffect(CopyScriptPath, "Gagal Salin!", Color3.fromRGB(230,0,0))
+        end
+    else
+        ButtonEffect(CopyScriptPath, "Path Tidak Ada!", Color3.fromRGB(230,0,0))
+    end
+end)
+
+local decompiling = false
+CopyDecompiled.MouseButton1Click:Connect(function()
+    local remoteIndex = FindRemote(lookingAt, lookingAtArgs)
+    if not isSynapse() then -- Hanya Synapse yang mendukung decompile (biasanya)
+        ButtonEffect(CopyDecompiled, "Decompile tidak didukung!", Color3.fromRGB(232, 65, 24))
         return
     end
+    if not decompiling and remoteIndex and remoteScripts[remoteIndex] and lookingAt then
+        decompiling = true
+        local originalText = CopyDecompiled.Text
+        local originalColor = CopyDecompiled.TextColor3
 
-    currentRemoteLookingAt = remoteInstance
-    currentRemoteDataKey = dataKey
-    local data = remoteData[dataKey]
+        task.spawn(function()
+            local i = 0
+            while decompiling do
+                i = (i % 3) + 1
+                CopyDecompiled.Text = "Mendekompilasi" .. string.rep(".", i)
+                task.wait(0.5)
+            end
+        end)
+        
+        local success, result = pcall(decompile, remoteScripts[remoteIndex])
+        decompiling = false -- Set setelah pcall selesai
 
-    if InfoHeaderText and IsValid(InfoHeaderText) then InfoHeaderText.Text = "Info: " .. remoteInstance.Name end
-    local isFunc = remoteInstance:IsA("RemoteFunction")
-    if CopyReturnValueButton and IsValid(CopyReturnValueButton) then CopyReturnValueButton.Visible = isFunc end
-    
-    local fireMethod = isFunc and ":InvokeServer(" or ":FireServer("
-    local currentArgs = data.argsHistory[#data.argsHistory] 
-    
-    local success, codeStr = pcall(convertTableToString, currentArgs, true)
-    if not success then codeStr = "{ --[[ Error converting args: " .. tostring(codeStr) .. " ]] }" end
+        if success and result then
+            local copySuccess, copyErr = pcall(setclipboard, result)
+            if copySuccess then
+                ButtonEffect(CopyDecompiled, "Dekompilasi Disalin!", Color3.fromRGB(76, 209, 55))
+            else
+                warn("Gagal menyalin dekompilasi:", copyErr)
+                ButtonEffect(CopyDecompiled, "Gagal Salin Dekompilasi!", Color3.fromRGB(232, 65, 24))
+            end
+        else
+            warn("Kesalahan dekompilasi:", result) -- result akan berisi pesan error dari decompile
+            ButtonEffect(CopyDecompiled, "Gagal Dekompilasi!", Color3.fromRGB(232, 65, 24))
+        end
+        task.delay(1.6, function()
+            if CopyDecompiled and CopyDecompiled.Parent then
+                 CopyDecompiled.Text = originalText
+                 CopyDecompiled.TextColor3 = originalColor
+            end
+        end)
+    end
+end)
 
-    if CodeTextLabel and IsValid(CodeTextLabel) then CodeTextLabel.Text = GetFullPathOfAnInstance(remoteInstance) .. fireMethod .. codeStr .. ")" end
-    
-    local successArgsEdit, argsEditStr = pcall(convertTableToString, currentArgs, true, 2) 
-    if not successArgsEdit then argsEditStr = "{ --[[ Error converting args: " .. tostring(argsEditStr) .. " ]] }" end
-    if ArgumentEditorTextBox and IsValid(ArgumentEditorTextBox) then ArgumentEditorTextBox.Text = argsEditStr end
+BlockRemote.MouseButton1Click:Connect(function()
+    if not lookingAt then return end
+    local bRemoteIndex = table.find(BlockList, lookingAt)
 
-    if CodeTextLabel and IsValid(CodeTextLabel) and TextService and IsValid(TextService) and CodeFrame and IsValid(CodeFrame) then
-        local textSizeSuccess, textSize = pcall(TextService.GetTextSize, TextService, CodeTextLabel.Text, CodeTextLabel.TextSize, CodeTextLabel.Font, Vector2.new(math.huge, CodeTextLabel.AbsoluteSize.Y))
-        if textSizeSuccess and textSize then
-            CodeTextLabel.Size = UDim2.new(0, textSize.X + 20, 0, CodeTextLabel.Size.Y.Offset) 
-            CodeFrame.CanvasSize = UDim2.new(0, textSize.X + 30, 0, CodeFrame.CanvasSize.Y.Scale > 0 and CodeFrame.CanvasSize.Y.Scale or 1) 
+    if not bRemoteIndex then
+        table.insert(BlockList, lookingAt)
+        BlockRemote.Text = "Buka blokir remote"
+        BlockRemote.TextColor3 = Color3.fromRGB(251, 197, 49) -- Kuning
+        if lookingAtButton and lookingAtButton.Parent then
+            lookingAtButton.Parent.RemoteName.TextColor3 = Color3.fromRGB(225, 177, 44) -- Kuning lebih gelap
+        end
+    else
+        table.remove(BlockList, bRemoteIndex)
+        BlockRemote.Text = "Blokir remote agar tidak menembak"
+        BlockRemote.TextColor3 = colorSettings["MainButtons"]["TextColor"]
+         if lookingAtButton and lookingAtButton.Parent then
+            lookingAtButton.Parent.RemoteName.TextColor3 = colorSettings["RemoteButtons"]["TextColor"]
         end
     end
+end)
 
-    if IgnoreRemoteButton and IsValid(IgnoreRemoteButton) then
-        IgnoreRemoteButton.Text = table.find(IgnoreList, remoteInstance) and "Berhenti Mengabaikan" or "Abaikan Remote Ini"
-        IgnoreRemoteButton.TextColor3 = table.find(IgnoreList, remoteInstance) and Color3.fromRGB(251, 197, 49) or colorSettings["MainButtons"]["TextColor"]
+IgnoreRemote.MouseButton1Click:Connect(function()
+    if not lookingAt then return end
+    local iRemoteIndex = table.find(IgnoreList, lookingAt)
+    if not iRemoteIndex then
+        table.insert(IgnoreList, lookingAt)
+        IgnoreRemote.Text = "Berhenti mengabaikan remote"
+        IgnoreRemote.TextColor3 = Color3.fromRGB(127, 143, 166) -- Abu-abu
+        if lookingAtButton and lookingAtButton.Parent then
+            lookingAtButton.Parent.RemoteName.TextColor3 = Color3.fromRGB(127, 143, 166)
+        end
+    else
+        table.remove(IgnoreList, iRemoteIndex)
+        IgnoreRemote.Text = "Abaikan remote"
+        IgnoreRemote.TextColor3 = colorSettings["MainButtons"]["TextColor"]
+        if lookingAtButton and lookingAtButton.Parent then
+            lookingAtButton.Parent.RemoteName.TextColor3 = colorSettings["RemoteButtons"]["TextColor"]
+        end
     end
-    if BlockRemoteButton and IsValid(BlockRemoteButton) then
-        BlockRemoteButton.Text = table.find(BlockList, remoteInstance) and "Buka Blokir Remote" or "Blokir Remote Ini"
-        BlockRemoteButton.TextColor3 = table.find(BlockList, remoteInstance) and Color3.fromRGB(251, 197, 49) or colorSettings["MainButtons"]["TextColor"]
-    end
-    if UnstackRemoteButton and IsValid(UnstackRemoteButton) then
-        UnstackRemoteButton.Text = table.find(unstackedRemotes, remoteInstance) and "Stack Remote Ini" or "Unstack Remote (Argumen Baru)"
-        UnstackRemoteButton.TextColor3 = table.find(unstackedRemotes, remoteInstance) and Color3.fromRGB(251, 197, 49) or colorSettings["MainButtons"]["TextColor"]
-    end
+end)
 
-    if not isInfoFrameOpen and InfoFrame and IsValid(InfoFrame) and mainFrame and IsValid(mainFrame) and OpenInfoFrameButton and IsValid(OpenInfoFrameButton) then
-        InfoFrame.Visible = true
-        isInfoFrameOpen = true
-        OpenInfoFrameButton.Text = "<"
-        mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset + InfoFrame.Size.X.Offset + 5, 0, mainFrame.Size.Y.Offset)
-        InfoFrame.ZIndex = 1000 
+WhileLoop.MouseButton1Click:Connect(function()
+    if not lookingAt then return end
+    local codeToCopy = "while task.wait() do\n   "..Code.Text.."\nend"
+    local success, err = pcall(setclipboard, codeToCopy)
+    if success then
+        ButtonEffect(WhileLoop)
+    else
+        warn("Gagal menyalin while loop:", err)
+        ButtonEffect(WhileLoop, "Gagal Salin!", Color3.fromRGB(230,0,0))
     end
+end)
+
+Clear.MouseButton1Click:Connect(function()
+    for _, v in ipairs(RemoteScrollFrame:GetChildren()) do -- Menggunakan ipairs
+        if v:IsA("TextButton") and v.Name == "RemoteButton" then -- Hanya hapus tombol remote yang relevan
+            v:Destroy()
+        end
+    end
+    for _, v_conn in ipairs(connections) do
+        if typeof(v_conn) == "RBXScriptConnection" then -- Pastikan itu koneksi
+             v_conn:Disconnect()
+        end
+    end
+    -- reset semuanya
+    buttonOffset = -25
+    scrollSizeOffset = 287 -- Reset ke nilai awal
+    remotes = {}
+    remoteArgs = {}
+    remoteButtons = {}
+    remoteScripts = {}
+    -- IgnoreList = {} -- Tidak perlu di-reset jika ingin persist antar clear, atau reset jika perlu
+    -- BlockList = {} -- Sama seperti IgnoreList
+    unstacked = {}
+    connections = {}
+    RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollSizeOffset)
+
+    ButtonEffect(Clear, "Log Dibersihkan!", Color3.fromRGB(76,209,55))
+end)
+
+DoNotStack.MouseButton1Click:Connect(function()
+    if lookingAt then
+        local isUnstackedIndex = table.find(unstacked, lookingAt)
+        if isUnstackedIndex then
+            table.remove(unstacked, isUnstackedIndex)
+            DoNotStack.Text = "Jangan stack remote saat arg baru"
+            DoNotStack.TextColor3 = colorSettings["MainButtons"]["TextColor"]
+        else
+            table.insert(unstacked, lookingAt)
+            DoNotStack.Text = "Stack remote"
+            DoNotStack.TextColor3 = Color3.fromRGB(251, 197, 49) -- Kuning
+        end
+    end
+end)
+
+local function tableLength(t) -- Pengganti len() yang lebih aman untuk tabel campuran
+    local count = 0
+    if type(t) == "table" then
+        for _ in pairs(t) do
+            count = count + 1
+        end
+    end
+    return count
 end
 
-function convertTableToString(tbl, prettyPrint, indentLevel, visited)
-    local typeTbl = type(tbl)
-    if typeTbl ~= "table" then
-        if typeTbl == "string" then
-            return '"' .. tbl:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n"):gsub("\r", "\\r") .. '"'
-        elseif typeTbl == "Instance" then
-            return IsValid(tbl) and GetFullPathOfAnInstance(tbl) or "nil --[[ Instance dihancurkan ]]"
-        elseif typeTbl == "EnumItem" then
-            return "Enum." .. tbl.EnumType.Name .. "." .. tbl.Name
-        elseif typeTbl == "nil" then
-            return "nil"
-        else
-            return tostring(tbl)
-        end
-    end
-    visited = visited or {}
-    if visited[tbl] then return "{ --[[ Referensi siklik detectée ]] }" end
-    visited[tbl] = true
-    indentLevel = indentLevel or 0
-    local str = "{"
+local function convertTableToString(argsTable, anies)
+    anies = anies or {} -- Untuk mendeteksi rekursi tabel
+    if anies[argsTable] then return "{RECURSION}" end
+    anies[argsTable] = true
+
+    local str = ""
     local first = true
-    local indentStr = prettyPrint and string.rep("  ", indentLevel + 1) or ""
-    local newLine = prettyPrint and "\n" or ""
-    local space = prettyPrint and " " or ""
-    local isArray = true
-    local count = 0
-    for _ in pairs(tbl) do count = count + 1 end
-    if count > 0 then 
-        for i = 1, count do if tbl[i] == nil then isArray = false; break end end
-        if count ~= #tbl then isArray = false end 
-    else isArray = (#tbl == 0) end
-    if isArray then
-        for i = 1, #tbl do
-            if not first then str = str .. "," .. space end
-            str = str .. newLine .. indentStr .. convertTableToString(tbl[i], prettyPrint, indentLevel + 1, visited)
-            first = false
+    for k, v in pairs(argsTable) do
+        if not first then str = str .. ", " end
+        if type(k) == "string" and k:match("^[%a_][%w_]*$") then -- Identifier valid
+            str = str .. k .. " = "
+        else
+            str = str .. "[" .. convertTableToString({k}, anies) .. "] = " -- Rekursi untuk kunci kompleks
         end
-    else 
-        for k, v in pairs(tbl) do
-            if not first then str = str .. "," .. space end
-            local keyStr
-            if type(k) == "string" and k:match("^[%a_][%w_]*$") then keyStr = k
-            else keyStr = "[" .. convertTableToString(k, false, 0, {}) .. "]" end
-            str = str .. newLine .. indentStr .. keyStr .. space .. "=" .. space .. convertTableToString(v, prettyPrint, indentLevel + 1, visited)
-            first = false
+
+        if v == nil then
+            str = str .. "nil"
+        elseif typeof(v) == "Instance" then
+            str = str .. GetFullPathOfAnInstance(v)
+        elseif type(v) == "number" or type(v) == "function" or type(v) == "boolean" then
+            str = str .. tostring(v)
+        elseif type(v) == "string" then
+            str = str .. string.format("%q", v) -- Menggunakan %q untuk string yang aman
+        elseif type(v) == "table" then
+            str = str .. "{" .. convertTableToString(v, anies) .. "}"
+        elseif type(v) == "userdata" then
+             str = str .. typeof(v)..": " .. tostring(v) -- Lebih informatif
+        else
+            str = str .. tostring(v) -- Fallback
         end
+        first = false
     end
-    visited[tbl] = nil 
-    str = str .. newLine .. (prettyPrint and count > 0 and string.rep("  ", indentLevel) or "") .. "}"
+    anies[argsTable] = nil -- Hapus setelah selesai
     return str
 end
 
-local function parseArgumentsString(argsString)
-    local success, func = pcall(loadstring, "return " .. argsString)
-    if not success or not func then
-        warn("TurtleSpy: Gagal mem-parse string argumen:", func) 
-        return nil, "Error parsing: " .. (func or "unknown error")
-    end
-    local env = getfenv(0) 
-    if not env.Enum then env.Enum = Enum end
-    if not env.game then env.game = game end 
-    if not env.workspace then env.workspace = workspace end
-    local setEnvSuccess, _ = pcall(setfenv, func, env) 
-    if not setEnvSuccess then warn("TurtleSpy: Gagal mengatur environment untuk parser argumen.") end
-    local execSuccess, result = pcall(func)
-    if not execSuccess then
-        warn("TurtleSpy: Gagal mengeksekusi string argumen yang diparsing:", result)
-        return nil, "Error executing: " .. (result or "unknown error")
-    end
-    if type(result) ~= "table" then 
-        if result == nil and argsString:match("^%s*nil%s*$") then return {}, nil end 
-        if result == nil and argsString:match("^%s*%{%s*%}%s*$") then return {}, nil end 
-        if type(result) ~= "nil" then return {result}, nil end
-        return nil, "Hasil parsing bukan tabel yang valid."
-    end
-    return result, nil
-end
+CopyReturn.MouseButton1Click:Connect(function()
+    local remoteIndex = FindRemote(lookingAt, lookingAtArgs)
+    if lookingAt and remoteIndex and isA(lookingAt, "RemoteFunction") then
+        local results
+        local success, err = pcall(function()
+            results = {lookingAt:InvokeServer(table.unpack(remoteArgs[remoteIndex]))}
+        end)
 
-MinimizeButton.MouseButton1Click:Connect(function()
-    isMainFrameMinimized = not isMainFrameMinimized
-    if isMainFrameMinimized then
-        if IsValid(RemoteScrollFrame) then RemoteScrollFrame.Visible = false end
-        if IsValid(FilterTextBox) then FilterTextBox.Visible = false end
-        if IsValid(ClearLogsButton) then ClearLogsButton.Visible = false end
-        if IsValid(UnstackAllButton) then UnstackAllButton.Visible = false end
-        if IsValid(SaveSessionButton) then SaveSessionButton.Visible = false end
-        if IsValid(LoadSessionButton) then LoadSessionButton.Visible = false end
-        if IsValid(HookSettingsFrame) then HookSettingsFrame.Visible = false end
-        if IsValid(Header) and IsValid(mainFrame) then
-            local headerHeight = Header.AbsoluteSize.Y
-            mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset, 0, headerHeight)
-        end
-        if IsValid(MinimizeButton) then MinimizeButton.Text = "O" end
-        if isInfoFrameOpen and IsValid(InfoFrame) then InfoFrame.Visible = false end
-    else
-        if IsValid(RemoteScrollFrame) then RemoteScrollFrame.Visible = true end
-        if IsValid(FilterTextBox) then FilterTextBox.Visible = true end
-        if IsValid(ClearLogsButton) then ClearLogsButton.Visible = true end
-        if IsValid(UnstackAllButton) then UnstackAllButton.Visible = true end
-        if IsValid(SaveSessionButton) then SaveSessionButton.Visible = true end
-        if IsValid(LoadSessionButton) then LoadSessionButton.Visible = true end
-        if IsValid(HookSettingsFrame) then HookSettingsFrame.Visible = true end
-        if IsValid(Header) and IsValid(FilterTextBox) and IsValid(RemoteScrollFrame) and IsValid(ClearLogsButton) and IsValid(SaveSessionButton) and IsValid(HookSettingsFrame) and IsValid(mainFrame) then
-            local totalBottomUIHeight = FilterTextBox.Size.Y.Offset + 5 + RemoteScrollFrame.Size.Y.Offset + 5 + ClearLogsButton.Size.Y.Offset + 5 + SaveSessionButton.Size.Y.Offset + 5 + HookSettingsFrame.Size.Y.Offset + 10
-            local fullHeight = Header.AbsoluteSize.Y + totalBottomUIHeight
-            mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset, 0, fullHeight)
-            RemoteScrollFrame.Size = UDim2.new(1,0,0, mainFrame.Size.Y.Offset - (Header.AbsoluteSize.Y + FilterTextBox.Size.Y.Offset + 5 + ClearLogsButton.Size.Y.Offset + 5 + SaveSessionButton.Size.Y.Offset + 5 + HookSettingsFrame.Size.Y.Offset + 10))
-        end
-        if IsValid(MinimizeButton) then MinimizeButton.Text = "_" end
-        if isInfoFrameOpen and IsValid(InfoFrame) then InfoFrame.Visible = true end
-    end
-end)
-
-OpenInfoFrameButton.MouseButton1Click:Connect(function()
-    if isMainFrameMinimized then return end 
-    isInfoFrameOpen = not isInfoFrameOpen
-    if IsValid(InfoFrame) then InfoFrame.Visible = isInfoFrameOpen end
-    if isInfoFrameOpen then
-        if IsValid(OpenInfoFrameButton) then OpenInfoFrameButton.Text = "<" end
-        if IsValid(mainFrame) and IsValid(InfoFrame) then
-             mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset + InfoFrame.Size.X.Offset + 5, 0, mainFrame.Size.Y.Offset)
-             InfoFrame.ZIndex = 1000 
-        end
-        if not currentRemoteLookingAt and IsValid(InfoHeaderText) and IsValid(CodeTextLabel) and IsValid(ArgumentEditorTextBox) then
-            InfoHeaderText.Text = "Info: Tidak ada remote dipilih"
-            CodeTextLabel.Text = "-- Pilih remote dari daftar untuk melihat detail --"
-            ArgumentEditorTextBox.Text = "{}"
-        end
-    else
-        if IsValid(OpenInfoFrameButton) then OpenInfoFrameButton.Text = ">" end
-        if IsValid(mainFrame) and IsValid(InfoFrame) then
-            mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset - InfoFrame.Size.X.Offset - 5, 0, mainFrame.Size.Y.Offset)
-            InfoFrame.ZIndex = 999
-        end
-    end
-end)
-
-CloseInfoFrameButton.MouseButton1Click:Connect(function()
-    if isInfoFrameOpen then
-        isInfoFrameOpen = false
-        if IsValid(InfoFrame) then InfoFrame.Visible = false end
-        if IsValid(OpenInfoFrameButton) then OpenInfoFrameButton.Text = ">" end
-        if IsValid(mainFrame) and IsValid(InfoFrame) then
-            mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset - InfoFrame.Size.X.Offset - 5, 0, mainFrame.Size.Y.Offset)
-            InfoFrame.ZIndex = 999
-        end
-        currentRemoteLookingAt = nil
-        currentRemoteDataKey = nil
-    end
-end)
-
-CopyCodeButton.MouseButton1Click:Connect(function()
-    if currentRemoteLookingAt and IsValid(CodeTextLabel) and CodeTextLabel.Text ~= "" and IsValid(CodeCommentTextLabel) then
-        local success, err = pcall(setclipboard, CodeCommentTextLabel.Text .. "\n\n" .. CodeTextLabel.Text)
-        ButtonEffect(CopyCodeButton, success and "Kode Disalin!" or "Gagal Menyalin", success)
-    else
-        ButtonEffect(CopyCodeButton, "Tidak Ada Kode", false)
-    end
-end)
-
-local function ExecuteRemote(remote, argsToExecute)
-    if not remote or not IsValid(remote) then
-        warn("TurtleSpy: Remote tidak valid untuk dieksekusi.")
-        return nil, "Remote tidak valid"
-    end
-    local result = {}
-    local successCall = false
-    local callError = "Unknown error"
-    local args = argsToExecute or {} 
-    if remote:IsA("RemoteFunction") then
-        successCall, result = pcall(remote.InvokeServer, remote, unpack(args))
-        if not successCall then callError = tostring(result) end 
-    elseif remote:IsA("RemoteEvent") then
-        successCall, result = pcall(remote.FireServer, remote, unpack(args))
-        if not successCall then callError = tostring(result) end
-    else return nil, "Tipe remote tidak didukung" end
-    if successCall then return result, nil else return nil, callError end
-end
-
-RunCodeButton.MouseButton1Click:Connect(function()
-    if currentRemoteLookingAt and currentRemoteDataKey and remoteData[currentRemoteDataKey] then
-        local data = remoteData[currentRemoteDataKey]
-        local originalArgs = data.argsHistory[#data.argsHistory] 
-        local _, err = ExecuteRemote(currentRemoteLookingAt, originalArgs)
-        if err then ButtonEffect(RunCodeButton, "Gagal Eksekusi!", false); warn("TurtleSpy: Gagal menjalankan kode asli:", err)
-        else ButtonEffect(RunCodeButton, "Kode Asli Dijalankan!", true) end
-    else ButtonEffect(RunCodeButton, "Pilih Remote Dulu", false) end
-end)
-
-ApplyArgumentsButton.MouseButton1Click:Connect(function()
-    if currentRemoteLookingAt and IsValid(ArgumentEditorTextBox) then
-        local argsStr = ArgumentEditorTextBox.Text
-        local parsedArgs, parseErr = parseArgumentsString(argsStr)
-        if parseErr then ButtonEffect(ApplyArgumentsButton, "Error Argumen!", false); warn("TurtleSpy: Gagal mem-parse argumen yang diedit:", parseErr); return end
-        local _, execErr = ExecuteRemote(currentRemoteLookingAt, parsedArgs) 
-        if execErr then ButtonEffect(ApplyArgumentsButton, "Gagal Eksekusi!", false); warn("TurtleSpy: Gagal menjalankan dengan argumen yang diedit:", execErr)
-        else ButtonEffect(ApplyArgumentsButton, "Dijalankan dg Arg Editan!", true) end
-    else ButtonEffect(ApplyArgumentsButton, "Pilih Remote Dulu", false) end
-end)
-
-CopyScriptPathButton.MouseButton1Click:Connect(function()
-    if currentRemoteLookingAt and currentRemoteDataKey and remoteData[currentRemoteDataKey] then
-        local data = remoteData[currentRemoteDataKey]
-        if data.callingScript and IsValid(data.callingScript) then
-            local path = GetFullPathOfAnInstance(data.callingScript)
-            local success, err = pcall(setclipboard, path)
-            ButtonEffect(CopyScriptPathButton, success and "Path Script Disalin!" or "Gagal Menyalin", success)
-        else ButtonEffect(CopyScriptPathButton, "Script Tidak Ditemukan", false) end
-    else ButtonEffect(CopyScriptPathButton, "Pilih Remote Dulu", false) end
-end)
-
-CopyDecompiledButton.MouseButton1Click:Connect(function()
-    if not decompileFunc then ButtonEffect(CopyDecompiledButton, "Decompile Tdk Tersedia", false); return end
-    if currentRemoteLookingAt and currentRemoteDataKey and remoteData[currentRemoteDataKey] then
-        local data = remoteData[currentRemoteDataKey]
-        if data.callingScript and IsValid(data.callingScript) then
-            if IsValid(CopyDecompiledButton) then CopyDecompiledButton.Text = "Mendekompilasi..." end
-            local success, result = pcall(decompileFunc, data.callingScript)
-            if success then
-                local cbSuccess, _ = pcall(setclipboard, result)
-                ButtonEffect(CopyDecompiledButton, cbSuccess and "Dekompilasi Disalin!" or "Gagal Menyalin Hasil", cbSuccess)
-            else ButtonEffect(CopyDecompiledButton, "Gagal Dekompilasi", false); warn("TurtleSpy: Decompilation error:", result) end
-            task.delay(1.5, function() if IsValid(CopyDecompiledButton) then CopyDecompiledButton.Text = "Salin Script Decompiled" end end)
-        else ButtonEffect(CopyDecompiledButton, "Script Tidak Ditemukan", false) end
-    else ButtonEffect(CopyDecompiledButton, "Pilih Remote Dulu", false) end
-end)
-
-CopyFullPathButton.MouseButton1Click:Connect(function()
-    if currentRemoteLookingAt and IsValid(currentRemoteLookingAt) then
-        local path = GetFullPathOfAnInstance(currentRemoteLookingAt)
-        local success, err = pcall(setclipboard, path)
-        ButtonEffect(CopyFullPathButton, success and "Path Instance Disalin!" or "Gagal Menyalin", success)
-    else ButtonEffect(CopyFullPathButton, "Pilih Remote Dulu", false) end
-end)
-
-IgnoreRemoteButton.MouseButton1Click:Connect(function()
-    if currentRemoteLookingAt then
-        local index = table.find(IgnoreList, currentRemoteLookingAt)
-        if index then
-            table.remove(IgnoreList, index)
-            if IsValid(IgnoreRemoteButton) then IgnoreRemoteButton.Text = "Abaikan Remote Ini"; IgnoreRemoteButton.TextColor3 = colorSettings["MainButtons"]["TextColor"] end
-            ButtonEffect(IgnoreRemoteButton, "Berhenti Mengabaikan", true)
-            if remoteData[currentRemoteDataKey] and IsValid(remoteData[currentRemoteDataKey].button) and IsValid(remoteData[currentRemoteDataKey].button.RemoteNameLabel) then
-                 remoteData[currentRemoteDataKey].button.RemoteNameLabel.TextColor3 = colorSettings["RemoteButtons"]["TextColor"] end
-        else
-            table.insert(IgnoreList, currentRemoteLookingAt)
-            if IsValid(IgnoreRemoteButton) then IgnoreRemoteButton.Text = "Berhenti Mengabaikan"; IgnoreRemoteButton.TextColor3 = Color3.fromRGB(251, 197, 49) end
-            ButtonEffect(IgnoreRemoteButton, "Remote Diabaikan", true)
-            if remoteData[currentRemoteDataKey] and IsValid(remoteData[currentRemoteDataKey].button) and IsValid(remoteData[currentRemoteDataKey].button.RemoteNameLabel) then
-                 remoteData[currentRemoteDataKey].button.RemoteNameLabel.TextColor3 = Color3.fromRGB(127, 143, 166) end
-        end
-    else ButtonEffect(IgnoreRemoteButton, "Pilih Remote Dulu", false) end
-end)
-
-BlockRemoteButton.MouseButton1Click:Connect(function()
-    if currentRemoteLookingAt then
-        local index = table.find(BlockList, currentRemoteLookingAt)
-        if index then
-            table.remove(BlockList, index)
-            if IsValid(BlockRemoteButton) then BlockRemoteButton.Text = "Blokir Remote Ini"; BlockRemoteButton.TextColor3 = colorSettings["MainButtons"]["TextColor"] end
-            ButtonEffect(BlockRemoteButton, "Blokir Dilepas", true)
-            if remoteData[currentRemoteDataKey] and IsValid(remoteData[currentRemoteDataKey].button) and IsValid(remoteData[currentRemoteDataKey].button.RemoteNameLabel) then
-                 remoteData[currentRemoteDataKey].button.RemoteNameLabel.TextColor3 = colorSettings["RemoteButtons"]["TextColor"] end
-        else
-            table.insert(BlockList, currentRemoteLookingAt)
-            if IsValid(BlockRemoteButton) then BlockRemoteButton.Text = "Buka Blokir Remote"; BlockRemoteButton.TextColor3 = Color3.fromRGB(251, 197, 49) end
-            ButtonEffect(BlockRemoteButton, "Remote Diblokir", true)
-            if remoteData[currentRemoteDataKey] and IsValid(remoteData[currentRemoteDataKey].button) and IsValid(remoteData[currentRemoteDataKey].button.RemoteNameLabel) then
-                 remoteData[currentRemoteDataKey].button.RemoteNameLabel.TextColor3 = Color3.fromRGB(225, 177, 44) end
-        end
-    else ButtonEffect(BlockRemoteButton, "Pilih Remote Dulu", false) end
-end)
-
-UnstackRemoteButton.MouseButton1Click:Connect(function()
-    if currentRemoteLookingAt then
-        local index = table.find(unstackedRemotes, currentRemoteLookingAt)
-        if index then
-            table.remove(unstackedRemotes, index)
-            if IsValid(UnstackRemoteButton) then UnstackRemoteButton.Text = "Unstack Remote (Argumen Baru)"; UnstackRemoteButton.TextColor3 = colorSettings["MainButtons"]["TextColor"] end
-            ButtonEffect(UnstackRemoteButton, "Remote Akan Di-stack", true)
-        else
-            table.insert(unstackedRemotes, currentRemoteLookingAt)
-            if IsValid(UnstackRemoteButton) then UnstackRemoteButton.Text = "Stack Remote Ini"; UnstackRemoteButton.TextColor3 = Color3.fromRGB(251, 197, 49) end
-            ButtonEffect(UnstackRemoteButton, "Remote Akan Di-unstack", true)
-        end
-    else ButtonEffect(UnstackRemoteButton, "Pilih Remote Dulu", false) end
-end)
-
-WhileLoopButton.MouseButton1Click:Connect(function()
-    if currentRemoteLookingAt and IsValid(CodeTextLabel) and CodeTextLabel.Text ~= "" then
-        local loopScript = string.format("while task.wait() do\n    %s\nend", CodeTextLabel.Text)
-        local success, err = pcall(setclipboard, loopScript)
-        ButtonEffect(WhileLoopButton, success and "Skrip Loop Disalin!" or "Gagal Menyalin", success)
-    else ButtonEffect(WhileLoopButton, "Tidak Ada Kode", false) end
-end)
-
-CopyReturnValueButton.MouseButton1Click:Connect(function()
-    if currentRemoteLookingAt and currentRemoteLookingAt:IsA("RemoteFunction") and currentRemoteDataKey and remoteData[currentRemoteDataKey] then
-        local data = remoteData[currentRemoteDataKey]
-        local originalArgs = data.argsHistory[#data.argsHistory]
-        local result, execErr = ExecuteRemote(currentRemoteLookingAt, originalArgs)
-        if execErr then ButtonEffect(CopyReturnValueButton, "Gagal Eksekusi!", false); warn("TurtleSpy: Gagal mengeksekusi RemoteFunction untuk menyalin return:", execErr); return end
-        local success, returnStr = pcall(convertTableToString, result, true)
-        if not success then returnStr = "--[[ Error converting return value: " .. tostring(returnStr) .. " ]]--" end
-        local cbSuccess, _ = pcall(setclipboard, returnStr)
-        ButtonEffect(CopyReturnValueButton, cbSuccess and "Return Disalin!" or "Gagal Menyalin Return", cbSuccess)
-    elseif not (currentRemoteLookingAt and currentRemoteLookingAt:IsA("RemoteFunction")) then ButtonEffect(CopyReturnValueButton, "Ini Bukan Fungsi", false)
-    else ButtonEffect(CopyReturnValueButton, "Pilih Remote Dulu", false) end
-end)
-
-ClearLogsButton.MouseButton1Click:Connect(function()
-    if IsValid(RemoteScrollFrame) then
-        for _, child in ipairs(RemoteScrollFrame:GetChildren()) do
-            if child:IsA("TextButton") and child.Name ~= "RemoteButtonTemplate" then child:Destroy() end
-        end
-    end
-    for _, conn in ipairs(activeConnections) do if conn and conn.Connected then conn:Disconnect() end end
-    activeConnections = {}
-    remoteData = {}
-    buttonOffset = 5 
-    if IsValid(RemoteScrollFrame) then RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollSizeOffset) end
-    currentRemoteLookingAt = nil
-    currentRemoteDataKey = nil
-    if isInfoFrameOpen and IsValid(CloseInfoFrameButton) then CloseInfoFrameButton:MouseButton1Click() end
-    ButtonEffect(ClearLogsButton, "Log Dibersihkan!", true)
-end)
-
-UnstackAllButton.MouseButton1Click:Connect(function()
-    local currentUnstackedCount = #unstackedRemotes
-    local allKnownRemotes = {}
-    for _, dataItem in pairs(remoteData) do 
-        if dataItem.instance and IsValid(dataItem.instance) then table.insert(allKnownRemotes, dataItem.instance) end
-    end
-    if currentUnstackedCount > 0 and currentUnstackedCount == #allKnownRemotes then 
-        unstackedRemotes = {}
-        if IsValid(UnstackAllButton) then UnstackAllButton.Text = "Unstack Semua" end
-        ButtonEffect(UnstackAllButton, "Semua Di-stack Ulang", true)
-    else 
-        unstackedRemotes = {} 
-        for _, remoteInst in ipairs(allKnownRemotes) do
-            if not table.find(unstackedRemotes, remoteInst) then table.insert(unstackedRemotes, remoteInst) end
-        end
-        if IsValid(UnstackAllButton) then UnstackAllButton.Text = "Stack Semua" end
-        ButtonEffect(UnstackAllButton, "Semua Di-unstack", true)
-    end
-    if currentRemoteLookingAt and isInfoFrameOpen and IsValid(UnstackRemoteButton) then
-        UnstackRemoteButton.Text = table.find(unstackedRemotes, currentRemoteLookingAt) and "Stack Remote Ini" or "Unstack Remote (Argumen Baru)"
-        UnstackRemoteButton.TextColor3 = table.find(unstackedRemotes, currentRemoteLookingAt) and Color3.fromRGB(251, 197, 49) or colorSettings["MainButtons"]["TextColor"]
-    end
-end)
-
-SaveSessionButton.MouseButton1Click:Connect(function()
-    local sessionData = { remotes = {}, ignoreList = {}, blockList = {}, unstackedRemotes = {} }
-    for _, dataItem in pairs(remoteData) do
-        if dataItem.instance and IsValid(dataItem.instance) then
-            local remoteInfo = {
-                path = GetFullPathOfAnInstance(dataItem.instance), name = dataItem.instance.Name, className = dataItem.instance.ClassName,
-                argsHistory = {}, count = dataItem.count,
-            }
-            if #dataItem.argsHistory > 0 then
-                 local success, argStr = pcall(convertTableToString, dataItem.argsHistory[#dataItem.argsHistory], false)
-                 if success then remoteInfo.lastArgsString = argStr else remoteInfo.lastArgsString = "{}" end
-            end
-            table.insert(sessionData.remotes, remoteInfo)
-        end
-    end
-    for _, remoteInst in ipairs(IgnoreList) do if IsValid(remoteInst) then table.insert(sessionData.ignoreList, GetFullPathOfAnInstance(remoteInst)) end end
-    for _, remoteInst in ipairs(BlockList) do if IsValid(remoteInst) then table.insert(sessionData.blockList, GetFullPathOfAnInstance(remoteInst)) end end
-    for _, remoteInst in ipairs(unstackedRemotes) do if IsValid(remoteInst) then table.insert(sessionData.unstackedRemotes, GetFullPathOfAnInstance(remoteInst)) end end
-    local success, encodedData = pcall(HttpService.JSONEncode, HttpService, sessionData)
-    if success then
-        local writeSuccess, err = pcall(safeWriteFile, "TurtleSpySession.json", encodedData)
-        ButtonEffect(SaveSessionButton, writeSuccess and "Sesi Disimpan!" or "Gagal Menyimpan", writeSuccess)
-        if not writeSuccess then warn("TurtleSpy: Gagal menulis file sesi:", err) end
-    else ButtonEffect(SaveSessionButton, "Gagal Encode Sesi", false); warn("TurtleSpy: Gagal JSONEncode sesi:", encodedData) end
-end)
-
-LoadSessionButton.MouseButton1Click:Connect(function()
-    local success, jsonData = pcall(safeReadFile, "TurtleSpySession.json")
-    if not success or not jsonData then ButtonEffect(LoadSessionButton, "File Sesi Tidak Ada", false); warn("TurtleSpy: Gagal membaca file sesi:", jsonData); return end
-    local decodeSuccess, sessionData = pcall(HttpService.JSONDecode, HttpService, jsonData)
-    if not decodeSuccess then ButtonEffect(LoadSessionButton, "Gagal Decode Sesi", false); warn("TurtleSpy: Gagal JSONDecode sesi:", sessionData); return end
-    if IsValid(ClearLogsButton) then ClearLogsButton:MouseButton1Click() end
-    local function findInstanceByPath(pathString)
-        if type(pathString) ~= "string" then return nil end; local parts = {}
-        for part in pathString:gmatch("([^%.%[%]:]+)") do table.insert(parts, part:gsub('^%s*"?(.-)"?%s*$', "%1")) end
-        local currentInstance = game
-        for i, partName in ipairs(parts) do
-            if currentInstance == nil then return nil end
-            if i == 1 and partName:lower() == "game" then goto continue_loop end
-            local foundChild = nil
-            local sfc, fc = pcall(currentInstance.FindFirstChild, currentInstance, partName, true)
-            if sfc and fc then foundChild = fc
+        if success then
+            local resultString = convertTableToString(results)
+            local copySuccess, copyErr = pcall(setclipboard, resultString)
+            if copySuccess then
+                ButtonEffect(CopyReturn)
             else
-                sfc, fc = pcall(currentInstance.FindFirstChild, currentInstance, partName)
-                if sfc and fc then foundChild = fc
-                else
-                    local sgs, serv = pcall(currentInstance.GetService, currentInstance, partName)
-                    if sgs and serv then foundChild = serv end
-                end
+                warn("Gagal menyalin return value:", copyErr)
+                ButtonEffect(CopyReturn, "Gagal Salin Return!", Color3.fromRGB(230,0,0))
             end
-            if foundChild then currentInstance = foundChild else return nil end
-            ::continue_loop::
+        else
+            warn("Gagal invoke remote untuk copy return:", err)
+            ButtonEffect(CopyReturn, "Gagal Invoke!", Color3.fromRGB(230,0,0))
         end
-        return currentInstance
+    elseif not isA(lookingAt, "RemoteFunction") then
+         ButtonEffect(CopyReturn, "Bukan Fungsi!", Color3.fromRGB(230,0,0))
     end
-    for _, remoteInfo in ipairs(sessionData.remotes or {}) do
-        local instance = findInstanceByPath(remoteInfo.path)
-        if instance and IsValid(instance) and instance:IsA(remoteInfo.className) then
-            local args = {}; if remoteInfo.lastArgsString then local parsed, _ = parseArgumentsString(remoteInfo.lastArgsString); args = parsed or {} end
-            local dummyScript = Instance.new("LocalScript"); dummyScript.Name = "LoadedFromSession"
-            addToListInternal(instance:IsA("RemoteEvent"), instance, dummyScript, unpack(args))
-            dummyScript:Destroy()
-            local dataKey = GetKeyForRemote(instance, args, table.find(unstackedRemotes, instance) ~= nil)
-            if remoteData[dataKey] and remoteInfo.count and remoteInfo.count > 1 then
-                remoteData[dataKey].count = remoteInfo.count
-                if IsValid(remoteData[dataKey].button) and IsValid(remoteData[dataKey].button.NumberLabel) then
-                    remoteData[dataKey].button.NumberLabel.Text = tostring(remoteInfo.count)
-                    if TextService and IsValid(TextService) then
-                        local tsSuccess, numSize = pcall(TextService.GetTextSize, TextService, remoteData[dataKey].button.NumberLabel.Text, remoteData[dataKey].button.NumberLabel.TextSize, remoteData[dataKey].button.NumberLabel.Font, Vector2.new())
-                        if tsSuccess and numSize and IsValid(remoteData[dataKey].button.RemoteNameLabel) then
-                             remoteData[dataKey].button.RemoteNameLabel.Position = UDim2.new(0, numSize.X + 10, 0, 0)
-                        end
-                    end
-                end
-            end
-        else warn("TurtleSpy: Gagal menemukan instance saat memuat sesi:", remoteInfo.path) end
-    end
-    IgnoreList = {}; for _, path in ipairs(sessionData.ignoreList or {}) do local inst = findInstanceByPath(path) if inst and IsValid(inst) then table.insert(IgnoreList, inst) end end
-    BlockList = {}; for _, path in ipairs(sessionData.blockList or {}) do local inst = findInstanceByPath(path) if inst and IsValid(inst) then table.insert(BlockList, inst) end end
-    unstackedRemotes = {}; for _, path in ipairs(sessionData.unstackedRemotes or {}) do local inst = findInstanceByPath(path) if inst and IsValid(inst) then table.insert(unstackedRemotes, inst) end end
-    ButtonEffect(LoadSessionButton, "Sesi Dimuat!", true)
-    if IsValid(FilterTextBox) then FilterTextBox.Text = "" end 
-    FilterRemotes("") 
 end)
 
-local fireServerHookActive = true
-local invokeServerHookActive = true
-local namecallHookActive = true
+RemoteScrollFrame.ChildAdded:Connect(function(child)
+    if not child:IsA("TextButton") or child.Name ~= "RemoteButton" then return end -- Hanya proses tombol yang relevan
 
-local function updateHookButton(button, textPrefix, isActive)
-    if not IsValid(button) then return end
-    button._isActive = isActive
-    button.Text = textPrefix .. (isActive and " (Aktif)" or " (Nonaktif)")
-    button.BackgroundColor3 = isActive and Color3.fromRGB(76, 209, 55) or colorSettings["MainButtons"]["BackgroundColor"]
-end
+    local remote = remotes[#remotes] -- Asumsi remote terakhir yang ditambahkan
+    local args = remoteArgs[#remoteArgs] -- Asumsi argumen terakhir
+    
+    if not remote or not args then return end -- Pemeriksaan keamanan
 
-ToggleFireServerHookButton.MouseButton1Click:Connect(function()
-    fireServerHookActive = not fireServerHookActive
-    updateHookButton(ToggleFireServerHookButton, "FireServer", fireServerHookActive)
-    ButtonEffect(ToggleFireServerHookButton, fireServerHookActive and "Hook FireServer Aktif" or "Hook FireServer Nonaktif", fireServerHookActive)
-end)
-ToggleInvokeServerHookButton.MouseButton1Click:Connect(function()
-    invokeServerHookActive = not invokeServerHookActive
-    updateHookButton(ToggleInvokeServerHookButton, "InvokeServer", invokeServerHookActive)
-    ButtonEffect(ToggleInvokeServerHookButton, invokeServerHookActive and "Hook InvokeServer Aktif" or "Hook InvokeServer Nonaktif", invokeServerHookActive)
-end)
-ToggleNamecallHookButton.MouseButton1Click:Connect(function()
-    namecallHookActive = not namecallHookActive
-    updateHookButton(ToggleNamecallHookButton, "Namecall", namecallHookActive)
-    ButtonEffect(ToggleNamecallHookButton, namecallHookActive and "Hook Namecall Aktif" or "Hook Namecall Nonaktif", namecallHookActive)
-end)
+    local isFunction = isA(remote, "RemoteFunction")
+    local fireMethod = isFunction and ":InvokeServer(" or ":FireServer("
 
-local function FilterRemotes(filterText)
-    if not IsValid(RemoteScrollFrame) then return end
-    filterText = filterText:lower()
-    local newButtonOffset = 5 
-    local visibleCount = 0
-    for _, dataItem in pairs(remoteData) do
-        if dataItem.button and IsValid(dataItem.button) then
-            local remoteName = dataItem.instance and dataItem.instance.Name:lower() or ""
-            if filterText == "" or remoteName:find(filterText, 1, true) then
-                dataItem.button.Visible = true
-                dataItem.button.Position = UDim2.new(0.05, 0, 0, newButtonOffset)
-                newButtonOffset = newButtonOffset + dataItem.button.AbsoluteSize.Y + 5
-                visibleCount = visibleCount + 1
-            else dataItem.button.Visible = false end
+    local connection = child.MouseButton1Click:Connect(function()
+        if not remote or not remote.Parent then -- Pastikan remote masih valid
+            InfoHeaderText.Text = "Info: Remote Tidak Valid"
+            Code.Text = "-- Remote sudah tidak ada atau tidak valid."
+            lookingAt = nil
+            lookingAtArgs = nil
+            lookingAtButton = nil
+            return
         end
-    end
-    RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, math.max(scrollSizeOffset, newButtonOffset))
-end
 
-if IsValid(FilterTextBox) then
-    FilterTextBox.FocusLost:Connect(function(enterPressed) if enterPressed then FilterRemotes(FilterTextBox.Text) end end)
-    FilterTextBox:GetPropertyChangedSignal("Text"):Connect(function() FilterRemotes(FilterTextBox.Text) end)
-end
+        InfoHeaderText.Text = "Info: " .. remote.Name
+        if isFunction then 
+            InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 0, CopyReturn.Position.Y.Offset + CopyReturn.Size.Y.Offset + 10)
+            CopyReturn.Visible = true
+        else
+            InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 0, WhileLoop.Position.Y.Offset + WhileLoop.Size.Y.Offset + 10)
+            CopyReturn.Visible = false
+        end
 
-if UserInputService and mouse then -- Pastikan mouse ada
-    UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
-        if gameProcessedEvent then return end 
-        if input.KeyCode == Enum.KeyCode[settings["Keybind"]:upper()] then
-            if IsValid(TurtleSpyGUI) then TurtleSpyGUI.Enabled = not TurtleSpyGUI.Enabled end
+        if not InfoFrame.Visible then
+             mainFrame.Size = UDim2.new(0, 207 + InfoFrame.Size.X.Offset, 0, mainFrame.Size.Y.Offset)
+             OpenInfoFrame.Text = "<"
+             InfoFrame.Visible = true
+             InfoFrameOpen = true
+        end
+        
+        local codeText = GetFullPathOfAnInstance(remote) .. fireMethod .. convertTableToString(args) .. ")"
+        Code.Text = codeText
+        
+        local textSizeVec = TextService:GetTextSize(codeText, Code.TextSize, Code.Font, Vector2.new(math.huge, Code.AbsoluteSize.Y))
+        CodeFrame.CanvasSize = UDim2.new(0, textSizeVec.X + 20, 0, textSizeVec.Y + 20) -- Tambahkan padding
+        
+        lookingAt = remote
+        lookingAtArgs = args
+        lookingAtButton = child.Number
+
+        local isBlocked = table.find(BlockList, remote)
+        if isBlocked then
+            BlockRemote.Text = "Buka blokir remote"
+            BlockRemote.TextColor3 = Color3.fromRGB(251, 197, 49)
+        else
+            BlockRemote.Text = "Blokir remote agar tidak menembak"
+            BlockRemote.TextColor3 = colorSettings["MainButtons"]["TextColor"]
+        end
+
+        local isIgnored = table.find(IgnoreList, remote) -- Menggunakan 'remote' bukan 'lookingAt'
+        if isIgnored then
+            IgnoreRemote.Text = "Berhenti mengabaikan remote"
+            IgnoreRemote.TextColor3 = Color3.fromRGB(127, 143, 166)
+        else
+            IgnoreRemote.Text = "Abaikan remote"
+            IgnoreRemote.TextColor3 = colorSettings["MainButtons"]["TextColor"]
+        end
+        
+        local isUnstacked = table.find(unstacked, remote)
+        if isUnstacked then
+            DoNotStack.Text = "Stack remote"
+            DoNotStack.TextColor3 = Color3.fromRGB(251, 197, 49)
+        else
+            DoNotStack.Text = "Jangan stack remote saat arg baru"
+            DoNotStack.TextColor3 = colorSettings["MainButtons"]["TextColor"]
         end
     end)
-end
+    table.insert(connections, connection)
+end)
 
-local browsedRemotesCache = {} 
-local browsedConnections = {}
-local browserButtonOffsetY = 10
-local browserCanvasCurrentSizeY = 286
 
-if IsValid(OpenBrowserButton) then
-    OpenBrowserButton.MouseButton1Click:Connect(function()
-        if not IsValid(BrowserHeader) or not IsValid(RemoteBrowserFrame) then return end
-        BrowserHeader.Visible = not BrowserHeader.Visible
-        if BrowserHeader.Visible then
-            for _, child in ipairs(RemoteBrowserFrame:GetChildren()) do
-                if child:IsA("TextButton") and child.Name ~= "RemoteButtonBrowserTemplate" then child:Destroy() end
-            end
-            for _, conn in ipairs(browsedConnections) do if conn.Connected then conn:Disconnect() end end
-            browsedConnections = {}; browsedRemotesCache = {}; browserButtonOffsetY = 10; browserCanvasCurrentSizeY = 286
-            RemoteBrowserFrame.CanvasSize = UDim2.new(0,0,0, browserCanvasCurrentSizeY)
-            for _, v in ipairs(game:GetDescendants()) do
-                if (v:IsA("RemoteEvent") or v:IsA("RemoteFunction")) and not table.find(browsedRemotesCache, v) then
-                    table.insert(browsedRemotesCache, v)
-                    local bButton = RemoteButtonBrowserTemplate:Clone(); bButton.Parent = RemoteBrowserFrame; bButton.Visible = true
-                    bButton.Position = UDim2.new(0.05, 0, 0, browserButtonOffsetY)
-                    local nameLabel = bButton:FindFirstChild("RemoteNameBrowserLabel") or RemoteNameBrowserTemplate:Clone()
-                    nameLabel.Parent = bButton; nameLabel.Text = v.Name
-                    local iconLabel = bButton:FindFirstChild("RemoteIconBrowser") or RemoteIconBrowserTemplate:Clone()
-                    iconLabel.Parent = bButton; iconLabel.Image = v:IsA("RemoteEvent") and eventImage or functionImage
-                    local fireMethod = v:IsA("RemoteEvent") and ":FireServer()" or ":InvokeServer()"
-                    local conn = bButton.MouseButton1Click:Connect(function()
-                        local successCopy, errCopy = pcall(setclipboard, GetFullPathOfAnInstance(v) .. fireMethod)
-                        ButtonEffect(bButton, successCopy and "Path Disalin!" or "Gagal", successCopy)
-                    end)
-                    table.insert(browsedConnections, conn)
-                    browserButtonOffsetY = browserButtonOffsetY + bButton.AbsoluteSize.Y + 5
-                    if browserButtonOffsetY > browserCanvasCurrentSizeY - 30 then 
-                        browserCanvasCurrentSizeY = browserCanvasCurrentSizeY + bButton.AbsoluteSize.Y + 5
-                        RemoteBrowserFrame.CanvasSize = UDim2.new(0, 0, 0, browserCanvasCurrentSizeY)
-                    end
-                end
-            end
-        end
-    end)
-end
-
-if IsValid(CloseBrowserButton) then
-    CloseBrowserButton.MouseButton1Click:Connect(function() if IsValid(BrowserHeader) then BrowserHeader.Visible = false end end)
-end
-
-local function GetKeyForRemote(remote, args, isUnstacked)
-    local key = GetFullPathOfAnInstance(remote) 
-    if not isUnstacked then
-        local success, argStr = pcall(HttpService.JSONEncode, HttpService, args)
-        if success then key = key .. "|" .. argStr 
-        else local simpleArgStr = ""; for _, argVal in ipairs(args) do simpleArgStr = simpleArgStr .. tostring(argVal) end; key = key .. "|SIMPLE|" .. simpleArgStr end
+function addToList(isEvent, remote, ...)
+    local currentId = (get_thread_context or syn.get_thread_identity)()
+    local originalIdentity = currentId
+     if syn and syn.set_thread_identity then
+        syn.set_thread_identity(7)
+    elseif get_thread_context and set_thread_context then
+        set_thread_context(7)
     end
-    return key
-end
 
-local function addToListInternal(isEvent, remote, callingScript, ...)
-    if not remote or not IsValid(remote) then return end
-    if table.find(IgnoreList, remote) then return end 
-    local currentId = getThreadContextFunc()
-    setThreadContextFunc(7) 
+    if not remote or typeof(remote) ~= "Instance" then  -- Pemeriksaan keamanan
+        if syn and syn.set_thread_identity then syn.set_thread_identity(originalIdentity)
+        elseif get_thread_context and set_thread_context then set_thread_context(originalIdentity) end
+        return
+    end
+
+    local name = remote.Name
     local args = {...}
-    local isUnstackedCurrent = table.find(unstackedRemotes, remote) ~= nil
-    local dataKey = GetKeyForRemote(remote, args, isUnstackedCurrent)
-    if not remoteData[dataKey] then
-        if IsValid(RemoteScrollFrame) and #RemoteScrollFrame:GetChildren() > settings.MaxDisplayedRemotes then
-            local oldestKey, oldestTimestamp = nil, math.huge
-            for k, dataItem in pairs(remoteData) do if dataItem.firstSeen < oldestTimestamp then oldestTimestamp = dataItem.firstSeen; oldestKey = k end end
-            if oldestKey and remoteData[oldestKey] and IsValid(remoteData[oldestKey].button) then remoteData[oldestKey].button:Destroy(); remoteData[oldestKey] = nil end
+    local remoteIndex = FindRemote(remote, args)
+
+    if not remoteIndex then
+        table.insert(remotes, remote)
+        remoteIndex = #remotes -- Dapatkan index baru
+
+        local rButtonInstance = RemoteButton:Clone()
+        remoteButtons[remoteIndex] = rButtonInstance.Number
+        remoteArgs[remoteIndex] = args
+        
+        local callingScript
+        if isSynapse() and getcallingscript then
+            callingScript = getcallingscript()
+        elseif rawget(_G, "getfenv") then -- Fallback untuk environment lain
+            local fenv = getfenv(0)
+            if fenv then callingScript = rawget(fenv, "script") end
         end
-        local rButton = RemoteButtonTemplate:Clone(); rButton.Name = remote.Name .. "_Button"; rButton.Parent = RemoteScrollFrame; rButton.Visible = true 
-        local numberLabel = rButton:FindFirstChild("NumberLabel") or NumberLabelTemplate:Clone(); numberLabel.Parent = rButton; numberLabel.Text = "1"
-        local remoteNameLabel = rButton:FindFirstChild("RemoteNameLabel") or RemoteNameLabelTemplate:Clone(); remoteNameLabel.Parent = rButton; remoteNameLabel.Text = remote.Name
-        if table.find(BlockList, remote) then remoteNameLabel.TextColor3 = Color3.fromRGB(225, 177, 44)
-        elseif table.find(IgnoreList, remote) then remoteNameLabel.TextColor3 = Color3.fromRGB(127, 143, 166) end
-        local remoteIcon = rButton:FindFirstChild("RemoteIcon") or RemoteIconTemplate:Clone(); remoteIcon.Parent = rButton; remoteIcon.Image = isEvent and eventImage or functionImage
-        remoteData[dataKey] = { instance = remote, argsHistory = {args}, callingScript = callingScript, count = 1, button = rButton, isEvent = isEvent, firstSeen = tick() }
-        if TextService and IsValid(TextService) then
-            local tsSuccess, numSize = pcall(TextService.GetTextSize, TextService, numberLabel.Text, numberLabel.TextSize, numberLabel.Font, Vector2.new())
-            if tsSuccess and numSize then remoteNameLabel.Position = UDim2.new(0, numSize.X + 10, 0, 0); remoteNameLabel.Size = UDim2.new(1, -(numSize.X + 10 + 30), 1, 0) end
+        remoteScripts[remoteIndex] = callingScript or "Tidak Diketahui"
+
+
+        rButtonInstance.Parent = RemoteScrollFrame
+        rButtonInstance.Visible = true
+        rButtonInstance.Number.Text = "1" -- Mulai dari 1
+
+        local numberTextSize = TextService:GetTextSize(rButtonInstance.Number.Text, rButtonInstance.Number.TextSize, rButtonInstance.Number.Font, Vector2.new(math.huge, rButtonInstance.Number.AbsoluteSize.Y))
+        rButtonInstance.RemoteName.Position = UDim2.new(0, rButtonInstance.Number.AbsolutePosition.X + numberTextSize.X + 5 - rButtonInstance.AbsolutePosition.X, 0, 0)
+        
+        if name then
+            rButtonInstance.RemoteName.Text = name
+        else
+            rButtonInstance.RemoteName.Text = isEvent and "RemoteEvent Tanpa Nama" or "RemoteFunction Tanpa Nama"
         end
-        local conn = rButton.MouseButton1Click:Connect(function() UpdateInfoFrame(remote, dataKey) end)
-        table.insert(activeConnections, conn)
-        FilterRemotes(IsValid(FilterTextBox) and FilterTextBox.Text or "") 
-        if settings.AutoScroll and IsValid(RemoteScrollFrame) and RemoteScrollFrame.Visible then RemoteScrollFrame.CanvasPosition = Vector2.new(0, RemoteScrollFrame.CanvasSize.Y.Offset) end
-    else 
-        local data = remoteData[dataKey]; data.count = data.count + 1
-        if IsValid(data.button) and IsValid(data.button.NumberLabel) then
-            data.button.NumberLabel.Text = tostring(data.count)
-            if TextService and IsValid(TextService) and IsValid(data.button.RemoteNameLabel) then
-                local tsSuccess, numSize = pcall(TextService.GetTextSize, TextService, data.button.NumberLabel.Text, data.button.NumberLabel.TextSize, data.button.NumberLabel.Font, Vector2.new())
-                if tsSuccess and numSize then data.button.RemoteNameLabel.Position = UDim2.new(0, numSize.X + 10, 0, 0); data.button.RemoteNameLabel.Size = UDim2.new(1, -(numSize.X + 10 + 30), 1, 0) end
-            end
+
+        if not isEvent then -- Ini adalah RemoteFunction
+            rButtonInstance.RemoteIcon.Image = functionImage
+        else
+            rButtonInstance.RemoteIcon.Image = eventImage
         end
-        table.insert(data.argsHistory, args); if #data.argsHistory > 20 then table.remove(data.argsHistory, 1) end 
-        data.callingScript = callingScript 
-        if currentRemoteLookingAt == remote and currentRemoteDataKey == dataKey and isInfoFrameOpen then UpdateInfoFrame(remote, dataKey) end
+        
+        buttonOffset = buttonOffset + 35
+        rButtonInstance.Position = UDim2.new(0.0912411734, 0, 0, buttonOffset)
+        
+        if #remotes * 35 > RemoteScrollFrame.AbsoluteSize.Y then -- Jika total tinggi tombol melebihi ukuran frame
+            scrollSizeOffset = scrollSizeOffset + 35
+            RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollSizeOffset)
+        end
+    else
+        local existingButtonNumber = remoteButtons[remoteIndex]
+        if existingButtonNumber and existingButtonNumber.Parent then
+            existingButtonNumber.Text = tostring(tonumber(existingButtonNumber.Text) + 1)
+            
+            local numberTextSize = TextService:GetTextSize(existingButtonNumber.Text, existingButtonNumber.TextSize, existingButtonNumber.Font, Vector2.new(math.huge, existingButtonNumber.AbsoluteSize.Y))
+            local remoteNameLabel = existingButtonNumber.Parent.RemoteName
+            remoteNameLabel.Position = UDim2.new(0, existingButtonNumber.AbsolutePosition.X + numberTextSize.X + 5 - existingButtonNumber.Parent.AbsolutePosition.X, 0, 0)
+            -- remoteNameLabel.Size = UDim2.new(0, math.max(50, 149 - numberTextSize.X), 0, 26) -- Pastikan ukuran tidak negatif
+        end
+
+        remoteArgs[remoteIndex] = args -- Selalu update argumen
+
+        if lookingAt and lookingAt == remote and lookingAtButton == remoteButtons[remoteIndex] and InfoFrame.Visible then
+            local fireMethod = isA(remote, "RemoteFunction") and ":InvokeServer(" or ":FireServer("
+            local codeText = GetFullPathOfAnInstance(remote) .. fireMethod .. convertTableToString(remoteArgs[remoteIndex]) .. ")"
+            Code.Text = codeText
+            local textSizeVec = TextService:GetTextSize(codeText, Code.TextSize, Code.Font, Vector2.new(math.huge, Code.AbsoluteSize.Y))
+            CodeFrame.CanvasSize = UDim2.new(0, textSizeVec.X + 20, 0, textSizeVec.Y + 20)
+        end
     end
-    setThreadContextFunc(currentId)
+
+    if syn and syn.set_thread_identity then
+        syn.set_thread_identity(originalIdentity)
+    elseif get_thread_context and set_thread_context then
+        set_thread_context(originalIdentity)
+    end
 end
 
-local OldEvent_FireServer, OldFunction_InvokeServer, OldNamecall
-local hookSuccess = true
-
-if typeof(hookfunction) ~= "function" then
-    warn("TurtleSpy: CRITICAL - hookfunction is not available. Remote detection will not work.")
-    hookSuccess = false
-else
-    local remoteEventProto = Instance.new("RemoteEvent")
-    if remoteEventProto and remoteEventProto.FireServer then
-        local suc, res = pcall(function()
-            OldEvent_FireServer = hookfunction(remoteEventProto.FireServer, function(self, ...)
-                if not fireServerHookActive then return OldEvent_FireServer(self, ...) end
-                local isBlocked = false; local s, r = pcall(table.find, BlockList, self); if s then isBlocked = r end
-                if not checkcaller() and isBlocked then return end 
-                local script = getCallingScriptFunc and getCallingScriptFunc() or nil
-                addToListInternal(true, self, script, ...)
-                return OldEvent_FireServer(self, ...)
-            end)
-        end)
-        if not suc then warn("TurtleSpy: Gagal hook RemoteEvent.FireServer:", res); hookSuccess = false else print("TurtleSpy: RemoteEvent.FireServer hooked.") end
-    else warn("TurtleSpy: Tidak dapat membuat RemoteEvent prototype atau FireServer tidak ada."); hookSuccess = false end
-    if remoteEventProto then remoteEventProto:Destroy() end
-
-    local remoteFunctionProto = Instance.new("RemoteFunction")
-    if remoteFunctionProto and remoteFunctionProto.InvokeServer then
-        local suc, res = pcall(function()
-            OldFunction_InvokeServer = hookfunction(remoteFunctionProto.InvokeServer, function(self, ...)
-                if not invokeServerHookActive then return OldFunction_InvokeServer(self, ...) end
-                local isBlocked = false; local s, r = pcall(table.find, BlockList, self); if s then isBlocked = r end
-                if not checkcaller() and isBlocked then return end 
-                local script = getCallingScriptFunc and getCallingScriptFunc() or nil
-                addToListInternal(false, self, script, ...)
-                return OldFunction_InvokeServer(self, ...)
-            end)
-        end)
-        if not suc then warn("TurtleSpy: Gagal hook RemoteFunction.InvokeServer:", res); hookSuccess = false else print("TurtleSpy: RemoteFunction.InvokeServer hooked.") end
-    else warn("TurtleSpy: Tidak dapat membuat RemoteFunction prototype atau InvokeServer tidak ada."); hookSuccess = false end
-    if remoteFunctionProto then remoteFunctionProto:Destroy() end
-end
-
-if typeof(hookmetamethod) ~= "function" then
-    warn("TurtleSpy: CRITICAL - hookmetamethod is not available. Namecall detection will not work.")
-    hookSuccess = false
-else
-    local suc, res = pcall(function()
-        OldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-            if not namecallHookActive then return OldNamecall(self, ...) end
-            local method = getNamecallMethodFunc and getNamecallMethodFunc() or ""
-            local args = {...} 
-            if method == "FireServer" and self:IsA("RemoteEvent") then
-                local isBlocked = false; local s, r = pcall(table.find, BlockList, self); if s then isBlocked = r end
-                if not checkcaller() and isBlocked then return end
-                local script = getCallingScriptFunc and getCallingScriptFunc() or nil
-                addToListInternal(true, self, script, unpack(args)) 
-            elseif method == "InvokeServer" and self:IsA("RemoteFunction") then
-                local isBlocked = false; local s, r = pcall(table.find, BlockList, self); if s then isBlocked = r end
-                if not checkcaller() and isBlocked then return end
-                local script = getCallingScriptFunc and getCallingScriptFunc() or nil
-                addToListInternal(false, self, script, unpack(args)) 
-            end
-            return OldNamecall(self, ...)
-        end)
+local OldEvent
+local remoteEventProto = Instance.new("RemoteEvent") -- Buat satu prototipe
+if remoteEventProto.FireServer then -- Pastikan method ada
+    OldEvent = hookfunction(remoteEventProto.FireServer, function(Self, ...)
+        if not checkcaller() and table.find(BlockList, Self) then
+            return
+        elseif table.find(IgnoreList, Self) then
+            return OldEvent(Self, ...) -- Panggil yang asli
+        end
+        addToList(true, Self, ...)
+        return OldEvent(Self, ...) -- Selalu panggil yang asli setelah logging
     end)
-    if not suc then warn("TurtleSpy: Gagal hook __namecall:", res); hookSuccess = false else print("TurtleSpy: __namecall hooked.") end
+else
+    warn("TurtleSpy: Gagal hook RemoteEvent.FireServer, method tidak ditemukan.")
 end
 
-if not hookSuccess then
-    warn("TurtleSpy: SATU ATAU LEBIH HOOK GAGAL DIPASANG. Fungsi inti mungkin tidak bekerja.")
-end
-
-FilterRemotes("") 
-if IsValid(TurtleSpyGUI) then TurtleSpyGUI.Enabled = true end
-if IsValid(HeaderTextLabel) then HeaderTextLabel.Text = "TurtleSpy V2 (" .. executorName .. ")" end
-print("TurtleSpy: Inisialisasi UI akhir selesai.")
-
-if script and script.Destroying then 
-    script.Destroying:Connect(function()
-        print("TurtleSpy: Script dihancurkan, membersihkan...")
-        if OldEvent_FireServer and typeof(OldEvent_FireServer) == 'function' then 
-            local suc, err = pcall(OldEvent_FireServer)
-            if not suc then warn("Error unhooking FireServer:", err) end
-        end 
-        if OldFunction_InvokeServer and typeof(OldFunction_InvokeServer) == 'function' then 
-            local suc, err = pcall(OldFunction_InvokeServer)
-            if not suc then warn("Error unhooking InvokeServer:", err) end
+local OldFunction
+local remoteFunctionProto = Instance.new("RemoteFunction") -- Buat satu prototipe
+if remoteFunctionProto.InvokeServer then -- Pastikan method ada
+    OldFunction = hookfunction(remoteFunctionProto.InvokeServer, function(Self, ...)
+        if not checkcaller() and table.find(BlockList, Self) then
+            return -- Untuk fungsi, return nil atau error jika diblokir
+        elseif table.find(IgnoreList, Self) then
+            return OldFunction(Self, ...) -- Panggil yang asli
         end
-        if OldNamecall and typeof(OldNamecall) == 'function' then 
-            local suc, err = pcall(OldNamecall)
-            if not suc then warn("Error unhooking Namecall:", err) end
-        end
-        for _, conn in ipairs(activeConnections) do if conn and conn.Connected then conn:Disconnect() end end
-        activeConnections = {}
-        if IsValid(TurtleSpyGUI) then TurtleSpyGUI:Destroy() end
-        pcall(safeWriteFile, settingsFileName, HttpService:JSONEncode(settings))
-        print("TurtleSpy: Pembersihan selesai.")
+        addToList(false, Self, ...)
+        return OldFunction(Self, ...) -- Selalu panggil yang asli setelah logging dan return hasilnya
     end)
+else
+    warn("TurtleSpy: Gagal hook RemoteFunction.InvokeServer, method tidak ditemukan.")
 end
 
-print("TurtleSpy V2 Enhanced (Arceus X Fix V2) loaded. Executor: " .. executorName .. ". Keybind: " .. settings.Keybind)
-if executorName == "Arceus X" and (typeof(readfile) ~= "function" or typeof(writefile) ~= "function" or typeof(isfile) ~= "function") then
-    warn("TurtleSpy (Arceus X): Global file functions (readfile/writefile/isfile) not detected. File operations might be unreliable. Saving/loading sessions may not work correctly.")
-end
 
-if not hookSuccess then
-    if IsValid(HeaderTextLabel) then
-        HeaderTextLabel.Text = HeaderTextLabel.Text .. " (HOOK FAIL)"
-        HeaderTextLabel.TextColor3 = Color3.fromRGB(255,0,0)
+local OldNamecall
+OldNamecall = hookmetamethod(game,"__namecall",function(...)
+    local args = {...}
+    local Self = args[1]
+    local currentNamecallMethod = (getnamecallmethod or get_namecall_method)() -- Simpan method saat ini
+
+    if typeof(Self) == "Instance" then -- Hanya proses jika Self adalah Instance
+        if currentNamecallMethod == "FireServer" and isA(Self, "RemoteEvent") then
+            if not checkcaller() and table.find(BlockList, Self) then
+                return -- Jangan panggil OldNamecall jika diblokir
+            elseif table.find(IgnoreList, Self) then
+                return OldNamecall(...)
+            end
+            pcall(addToList, true, Self, select(2, ...)) -- Panggil addToList dengan argumen yang benar
+        elseif currentNamecallMethod == "InvokeServer" and isA(Self, 'RemoteFunction') then
+            if not checkcaller() and table.find(BlockList, Self) then
+                return -- Jangan panggil OldNamecall jika diblokir, return nil
+            elseif table.find(IgnoreList, Self) then
+                 return OldNamecall(...)
+            end
+            pcall(addToList, false, Self, select(2, ...)) -- Panggil addToList dengan argumen yang benar
+        end
     end
-    if IsValid(StatusLabel) then -- Anggap StatusLabel ada jika HeaderTextLabel ada
-        StatusLabel.Text = "KESALAHAN HOOK KRITIS! Periksa konsol (F9)."
-        StatusLabel.TextColor3 = Color3.fromRGB(255,100,100)
-    end
+    return OldNamecall(...)
+end)
+
+-- Inisialisasi efek glitch sekali saat GUI dimuat jika diinginkan
+task.wait(1) -- Beri waktu UI untuk render
+if HeaderTextLabel and HeaderTextLabel.Parent then
+    triggerGlitch()
 end
