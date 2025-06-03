@@ -1,6 +1,3 @@
--- TurtleSpy V1.5.3, credits to Intrer#0421
--- Ditambah fitur Overpower oleh Partner Coding (AI)
-
 local colorSettings =
 {
     ["Main"] = {
@@ -55,7 +52,81 @@ else
     end
 end
 
--- Compatibility for protosmasher: credits to sdjsdj (v3rm username) for converting to proto
+-- [[ AWAL BLOK PEMERIKSAAN FUNGSI FILE ]]
+
+-- Fungsi isSynapse() sudah ada di skripmu, kita akan menggunakannya.
+-- Asumsi PROTOSMASHER_LOADED adalah variabel global yang disediakan oleh exploit jika relevan.
+local IS_PROTOSMASHER = PROTOSMASHER_LOADED 
+
+-- Memastikan 'isfile' terdefinisi
+if not isfile then
+    print("TurtleSpy Info: 'isfile' tidak terdefinisi secara global. Mencoba fallback...")
+    if IS_PROTOSMASHER and getgenv().isfile then -- Mungkin sudah didefinisikan di getgenv oleh blok Protosmasher
+        isfile = getgenv().isfile
+        print("TurtleSpy Info: Menggunakan 'isfile' dari getgenv() Protosmasher.")
+    elseif syn and syn.isfile then -- Untuk Synapse
+        isfile = syn.isfile
+        print("TurtleSpy Info: Menggunakan 'syn.isfile'.")
+    else
+        print("TurtleSpy PERINGATAN: Fungsi 'isfile' tidak dapat ditemukan. Pengaturan mungkin tidak berfungsi dengan benar.")
+        isfile = function(path)
+            -- Fallback sangat dasar, mungkin tidak selalu akurat
+            local success, content = pcall(readfile, path) -- bergantung pada readfile
+            return success and content ~= nil
+        end
+    end
+end
+
+-- Memastikan 'readfile' terdefinisi
+if not readfile then
+    print("TurtleSpy Info: 'readfile' tidak terdefinisi secara global. Mencoba fallback...")
+    if syn and syn.readfile then -- Untuk Synapse
+        readfile = syn.readfile
+        print("TurtleSpy Info: Menggunakan 'syn.readfile'.")
+    else
+        print("TurtleSpy PERINGATAN: Fungsi 'readfile' tidak dapat ditemukan. Pengaturan mungkin tidak termuat.")
+        readfile = function(path)
+            print("TurtleSpy Error: 'readfile' tidak ada untuk membaca " .. tostring(path))
+            return nil
+        end
+    end
+end
+
+-- Memastikan 'writefile' terdefinisi
+if not writefile then
+    print("TurtleSpy Info: 'writefile' tidak terdefinisi secara global. Mencoba fallback...")
+    if syn and syn.writefile then -- Untuk Synapse
+        writefile = syn.writefile
+        print("TurtleSpy Info: Menggunakan 'syn.writefile'.")
+    else
+        print("TurtleSpy PERINGATAN: Fungsi 'writefile' tidak dapat ditemukan. Pengaturan mungkin tidak tersimpan.")
+        writefile = function(path, content)
+            print("TurtleSpy Error: 'writefile' tidak ada untuk menulis ke " .. tostring(path))
+        end
+    end
+end
+
+-- [[ AKHIR BLOK PEMERIKSAAN FUNGSI FILE ]]
+
+-- Pastikan blok kode PROTOSMASHER_LOADED juga aman
+if IS_PROTOSMASHER then
+    -- Fungsi newcclosure mungkin tidak ada di semua environment Protosmasher atau bisa error
+    local success_newcclosure, result_newcclosure = pcall(function()
+        if not getgenv().isfile then -- Hanya definisikan jika belum ada dari fallback di atas
+            getgenv().isfile = newcclosure(function(File)
+                local Suc, Er = pcall(readfile, File) -- readfile sudah kita coba amankan
+                if not Suc then
+                    return false
+                end
+                return true
+            end)
+            print("TurtleSpy Info: 'isfile' untuk Protosmasher didefinisikan via newcclosure.")
+        end
+    end)
+    if not success_newcclosure then
+        print("TurtleSpy PERINGATAN: Gagal mendefinisikan 'isfile' khusus Protosmasher: " .. tostring(result_newcclosure))
+    end
+end
 
 function isSynapse()
     if PROTOSMASHER_LOADED then
