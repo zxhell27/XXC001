@@ -1,4 +1,4 @@
--- TurtleSpy V1.5.3 (Enhanced by Gemini)
+-- TurtleSpy V1.5.3 (Enhanced by Gemini, Arceus X Compatibility Fix)
 -- Credits to Intrer#0421 for the original script
 
 local colorSettings =
@@ -52,11 +52,17 @@ local mouse = client:GetMouse()
 local executorName = "Unknown"
 local isSynapseLoaded = false
 local isProtoSmasherLoaded = false
+local isArceusXDetected = false -- Flag untuk Arceus X
+
 local getThreadContextFunc = nil
 local setThreadContextFunc = nil
 local getNamecallMethodFunc = nil
 local getCallingScriptFunc = nil
 local decompileFunc = nil
+local isfileFunc = nil -- Menggunakan variabel untuk fungsi file
+local readfileFunc = nil
+local writefileFunc = nil
+
 
 -- Deteksi Executor dan Fungsi Spesifik
 if syn and syn.protect_gui then -- Synapse X
@@ -67,98 +73,103 @@ if syn and syn.protect_gui then -- Synapse X
     getNamecallMethodFunc = getnamecallmethod
     getCallingScriptFunc = getcallingscript
     decompileFunc = decompile
-    ifisfile =isfile -- Synapse X sudah punya isfile global
-    readfile = readfile
-    writefile = writefile
+    isfileFunc = isfile 
+    readfileFunc = readfile
+    writefileFunc = writefile
 elseif PROTOSMASHER_LOADED then -- ProtoSmasher
     isProtoSmasherLoaded = true
     executorName = "ProtoSmasher"
-    -- ProtoSmasher mungkin memiliki nama fungsi yang berbeda atau tidak ada sama sekali
-    -- Ini adalah placeholder, sesuaikan jika nama fungsinya diketahui
     getThreadContextFunc = get_thread_context 
     setThreadContextFunc = set_thread_context
     getNamecallMethodFunc = get_namecall_method
-    getCallingScriptFunc = function() return getfenv(0).script end -- Perkiraan
+    getCallingScriptFunc = function() return getfenv(0).script end 
     decompileFunc = function() return "-- Decompilation not supported on ProtoSmasher" end
     
-    -- Fungsi file untuk ProtoSmasher
-    getgenv().isfile = newcclosure(function(File)
-        local Suc, Er = pcall(readfile, File)
-        return Suc
-    end)
-    -- readfile dan writefile seharusnya sudah ada di global ProtoSmasher
+    local sucRead, _ = pcall(function() return readfile end)
+    local sucWrite, _ = pcall(function() return writefile end)
+    local sucIsFile, _ = pcall(function() return isfile end)
+
+    if sucRead and sucWrite and sucIsFile then
+        readfileFunc = readfile
+        writefileFunc = writefile
+        isfileFunc = isfile
+    else -- Fallback jika fungsi global tidak ada di ProtoSmasher (jarang terjadi)
+         warn("TurtleSpy: ProtoSmasher file functions (readfile/writefile/isfile) not found globally. Using io fallback.")
+        isfileFunc = function(path) local s, _ = pcall(io.open, path, "r"); if s and _ then _.close() return true else return false end end
+        readfileFunc = function(path) local s,r = pcall(io.open, path, "r"); if s and r then local c = r:read("*a"); r:close(); return c else return nil end end
+        writefileFunc = function(path,c) local s,f = pcall(io.open, path, "w"); if s and f then f:write(c); f:close(); return true else return false end end
+    end
+
+elseif typeof(Arceus) == "table" or typeof(getgenv().Arceus) == "table" then -- Deteksi Arceus X (mungkin perlu disesuaikan)
+    isArceusXDetected = true
+    executorName = "Arceus X"
+    warn("TurtleSpy: Arceus X detected. Some features might be limited.")
+    getThreadContextFunc = function() return 7 end -- Arceus X mungkin tidak memiliki ini, fallback ke default
+    setThreadContextFunc = function() end
+    getNamecallMethodFunc = function() return getnamecallmethod and getnamecallmethod() or "" end -- Coba getnamecallmethod jika ada
+    getCallingScriptFunc = function() return getfenv(0).script end -- Umumnya aman
+    decompileFunc = function() return "-- Decompilation not supported or reliable on Arceus X" end
+
+    -- Cek fungsi file global di Arceus X, jika tidak ada, gunakan io.
+    local sucRead, _ = pcall(function() return readfile end)
+    local sucWrite, _ = pcall(function() return writefile end)
+    local sucIsFile, _ = pcall(function() return isfile end)
+
+    if sucRead and sucWrite and sucIsFile and readfile ~= nil and writefile ~= nil and isfile ~= nil then
+        readfileFunc = readfile
+        writefileFunc = writefile
+        isfileFunc = isfile
+        print("TurtleSpy (Arceus X): Using global file functions.")
+    else
+        warn("TurtleSpy (Arceus X): Global file functions (readfile/writefile/isfile) not found. Using basic io fallback (may have issues).")
+        isfileFunc = function(path) local s, f = pcall(io.open, path, "r"); if s and f then f:close(); return true else return false end end
+        readfileFunc = function(path) local s, f = pcall(io.open, path, "r"); if s and f then local c = f:read("*a"); f:close(); return c else warn("readfileFunc error for " .. path .. ": " .. tostring(f)); return nil end end
+        writefileFunc = function(path,c) local s, f = pcall(io.open, path, "w"); if s and f then f:write(c); f:close(); return true else warn("writefileFunc error for " .. path .. ": " .. tostring(f)); return false end end
+    end
+
 else -- Executor lain atau tidak ada
-    -- Fallback dasar jika fungsi spesifik executor tidak ditemukan
-    warn("TurtleSpy: Executor tidak dikenal atau fungsi penting tidak ditemukan. Beberapa fitur mungkin tidak berfungsi.")
-    getThreadContextFunc = function() return 7 end -- Default context
+    warn("TurtleSpy: Executor tidak dikenal. Menggunakan fallback umum. Beberapa fitur mungkin tidak berfungsi.")
+    getThreadContextFunc = function() return 7 end 
     setThreadContextFunc = function() end
     getNamecallMethodFunc = function() return "" end
-    getCallingScriptFunc = function() return nil end
+    getCallingScriptFunc = function() return getfenv(0).script end 
     decompileFunc = function() return "-- Decompilation not available" end
     
-    -- Implementasi file I/O dasar jika tidak ada (mungkin tidak berfungsi di semua executor)
-    if not isfile then
-        getgenv().isfile = function(path)
-            local success, _ = pcall(function() local f = io.open(path, "r") if f then f:close() return true else return false end end)
-            return success
-        end
-    end
-    if not readfile then
-        getgenv().readfile = function(path)
-            local success, result = pcall(function()
-                local file = io.open(path, "r")
-                if not file then return nil end
-                local content = file:read("*a")
-                file:close()
-                return content
-            end)
-            return success and result or nil
-        end
-    end
-    if not writefile then
-        getgenv().writefile = function(path, content)
-            local success, _ = pcall(function()
-                local file = io.open(path, "w")
-                if not file then return end
-                file:write(content)
-                file:close()
-            end)
-            return success
-        end
-    end
+    isfileFunc = function(path) local s, f = pcall(io.open, path, "r"); if s and f then f:close(); return true else return false end end
+    readfileFunc = function(path) local s, f = pcall(io.open, path, "r"); if s and f then local c = f:read("*a"); f:close(); return c else return nil end end
+    writefileFunc = function(path,c) local s, f = pcall(io.open, path, "w"); if s and f then f:write(c); f:close(); return true else return false end end
+    warn("TurtleSpy (Unknown Executor): Using basic io for file operations (may have issues).")
 end
 
 
 -- Muat atau buat file pengaturan
 local settingsFileName = "TurtleSpySettings_v2.json"
-if not isfile(settingsFileName) then
-    local success, err = pcall(writefile, settingsFileName, HttpService:JSONEncode(settings))
+if not isfileFunc(settingsFileName) then
+    local success, err = pcall(writefileFunc, settingsFileName, HttpService:JSONEncode(settings))
     if not success then warn("TurtleSpy: Gagal menyimpan pengaturan awal:", err) end
 else
-    local success, currentSettingsJson = pcall(readfile, settingsFileName)
+    local success, currentSettingsJson = pcall(readfileFunc, settingsFileName)
     if success and currentSettingsJson then
         local decodedSuccess, decodedSettings = pcall(HttpService.JSONDecode, HttpService, currentSettingsJson)
         if decodedSuccess then
-            -- Gabungkan pengaturan yang ada dengan default untuk menambahkan kunci baru
             for k, v in pairs(settings) do
                 if decodedSettings[k] == nil then
                     decodedSettings[k] = v
                 end
             end
             settings = decodedSettings
-            -- Simpan kembali jika ada kunci baru yang ditambahkan
-            local resaveSuccess, resaveErr = pcall(writefile, settingsFileName, HttpService:JSONEncode(settings))
+            local resaveSuccess, resaveErr = pcall(writefileFunc, settingsFileName, HttpService:JSONEncode(settings))
             if not resaveSuccess then warn("TurtleSpy: Gagal menyimpan ulang pengaturan:", resaveErr) end
         else
             warn("TurtleSpy: Gagal mendekode pengaturan, menggunakan default:", decodedSettings)
-            local backupSuccess, backupErr = pcall(writefile, settingsFileName .. ".backup", currentSettingsJson)
+            local backupSuccess, backupErr = pcall(writefileFunc, settingsFileName .. ".backup", currentSettingsJson)
             if not backupSuccess then warn("TurtleSpy: Gagal membuat backup pengaturan rusak:", backupErr) end
-            local rewriteSuccess, rewriteErr = pcall(writefile, settingsFileName, HttpService:JSONEncode(settings))
+            local rewriteSuccess, rewriteErr = pcall(writefileFunc, settingsFileName, HttpService:JSONEncode(settings))
             if not rewriteSuccess then warn("TurtleSpy: Gagal menulis ulang pengaturan dengan default:", rewriteErr) end
         end
     else
         warn("TurtleSpy: Gagal membaca file pengaturan, menggunakan default:", currentSettingsJson)
-        local rewriteSuccess, rewriteErr = pcall(writefile, settingsFileName, HttpService:JSONEncode(settings))
+        local rewriteSuccess, rewriteErr = pcall(writefileFunc, settingsFileName, HttpService:JSONEncode(settings))
         if not rewriteSuccess then warn("TurtleSpy: Gagal menulis ulang pengaturan dengan default:", rewriteErr) end
     end
 end
@@ -178,43 +189,58 @@ local function toUnicode(str)
 end
 
 local function GetFullPathOfAnInstance(instance)
-    if not instance or not instance.Parent then
+    if not instance then return "nil" end
+    if not instance.Parent then
         if instance == game then return "game" end
         if instance == workspace then return "workspace" end
         if instance == CoreGui then return "game:GetService('CoreGui')" end
         if instance == Players then return "game:GetService('Players')" end
         if instance == client and client == Players.LocalPlayer then return "game:GetService('Players').LocalPlayer" end
-        return (instance and instance.Name or "nil") .. " --[[ PARENTED TO NIL OR DESTROYED ]]"
+        return (instance.Name or "UnknownInstance") .. " --[[ PARENTED TO NIL OR DESTROYED ]]"
     end
 
-    local path = instance.Name
+    local path = {}
     local current = instance
-    while current.Parent do
-        if current.Parent == game then
-            path = "game." .. path
-            break
-        elseif current.Parent == workspace then
-            path = "workspace." .. path
-            break
+    while current ~= game and current.Parent do
+        local name = current.Name
+        if string.match(name, "^[%w_]+$") and not tonumber(name:sub(1,1)) then
+            table.insert(path, 1, "." .. name)
         else
-            local parentName = current.Parent.Name
-            local isServiceName = false
-            local successGetService, service = pcall(game.GetService, game, current.Parent.ClassName)
-            if successGetService and service == current.Parent then
-                 parentName = 'GetService("' .. current.Parent.ClassName .. '")'
-                 isServiceName = true
-            else
-                if string.match(parentName, "^[%w_]+$") then -- Hanya alphanumeric dan underscore
-                    -- aman
-                else
-                    parentName = '["' .. parentName:gsub('"', '\\"'):gsub('\\', '\\\\') .. '"]'
+            table.insert(path, 1, '["' .. name:gsub('"', '\\"'):gsub('\\', '\\\\') .. '"]')
+        end
+        
+        if current.Parent == game then
+             -- Cek apakah parent adalah service
+            local isService = false
+            for _, serviceChild in ipairs(game:GetChildren()) do
+                if serviceChild == current and serviceChild:IsA("ServiceProvider") then
+                    -- Ini cara kasar, lebih baik jika bisa :GetService
+                    local successGetService, serviceInstance = pcall(game.GetService, game, current.ClassName)
+                    if successGetService and serviceInstance == current then
+                        table.remove(path, 1) -- Hapus nama biasa
+                        table.insert(path, 1, ':GetService("' .. current.ClassName .. '")')
+                        isService = true
+                    end
+                    break
                 end
             end
-            path = parentName .. (isServiceName and "" or ".") .. path
+            if not isService and path[1]:sub(1,1) == "." then -- Jika bukan service dan diawali titik, hapus titik
+                path[1] = path[1]:sub(2)
+            elseif not isService and path[1]:sub(1,1) ~= "[" then -- Jika bukan service dan bukan kurung siku, tambahkan game.
+                 path[1] = name -- Hanya nama instance
+            end
+            table.insert(path, 1, "game")
+            break 
         end
         current = current.Parent
+        if not current then break end -- Antisipasi jika parent tiba-tiba nil
     end
-    return path
+    
+    local resultPath = table.concat(path, "")
+    -- Perbaikan kecil untuk path yang mungkin dimulai dengan game["ServiceName"]
+    resultPath = resultPath:gsub("^game%[", 'game:GetService('):gsub("%]%]", '")]') 
+                               :gsub('"":GetService', ':GetService') -- jika nama service kosong
+    return resultPath
 end
 
 
@@ -227,25 +253,25 @@ end)
 
 -- Variabel dan Tabel Penting GUI
 local buttonOffset = -25
-local scrollSizeOffset = 287 -- Ukuran default canvas scroll
+local scrollSizeOffset = 287 
 local functionImage = "http://www.roblox.com/asset/?id=413369623"
 local eventImage = "http://www.roblox.com/asset/?id=413369506"
-local remotes = {} -- Menyimpan instance remote asli
-local remoteData = {} -- Menyimpan data terkait remote (args, script, count, button, dll)
-local remoteButtons = {} -- Menyimpan referensi ke tombol GUI untuk setiap remote unik
-local IgnoreList = {} -- Daftar remote yang diabaikan
-local BlockList = {} -- Daftar remote yang diblokir
-local unstackedRemotes = {} -- Daftar remote yang tidak di-stack
-local activeConnections = {} -- Menyimpan koneksi event GUI untuk pembersihan
+-- local remotes = {} -- Tidak digunakan lagi, diganti remoteData
+local remoteData = {} 
+-- local remoteButtons = {} -- Tidak digunakan lagi
+local IgnoreList = {} 
+local BlockList = {} 
+local unstackedRemotes = {} 
+local activeConnections = {} 
 
--- GUI Elements (Sebagian besar dihasilkan, dengan tambahan baru)
+-- GUI Elements 
 local TurtleSpyGUI = Instance.new("ScreenGui")
 local mainFrame = Instance.new("Frame")
 local Header = Instance.new("Frame")
 local HeaderShading = Instance.new("Frame")
 local HeaderTextLabel = Instance.new("TextLabel")
 local RemoteScrollFrame = Instance.new("ScrollingFrame")
-local RemoteButtonTemplate = Instance.new("TextButton") -- Template, jangan diparent
+local RemoteButtonTemplate = Instance.new("TextButton") 
 local NumberLabelTemplate = Instance.new("TextLabel")
 local RemoteNameLabelTemplate = Instance.new("TextLabel")
 local RemoteIconTemplate = Instance.new("ImageLabel")
@@ -260,10 +286,10 @@ local CodeFrame = Instance.new("ScrollingFrame")
 local CodeTextLabel = Instance.new("TextLabel")
 local CodeCommentTextLabel = Instance.new("TextLabel")
 
-local ArgumentEditorFrame = Instance.new("Frame") -- Frame untuk editor argumen
+local ArgumentEditorFrame = Instance.new("Frame") 
 local ArgumentEditorLabel = Instance.new("TextLabel")
-local ArgumentEditorTextBox = Instance.new("TextBox") -- TextBox untuk mengedit argumen
-local ApplyArgumentsButton = Instance.new("TextButton") -- Tombol untuk menerapkan argumen yang diedit
+local ArgumentEditorTextBox = Instance.new("TextBox") 
+local ApplyArgumentsButton = Instance.new("TextButton") 
 
 local InfoButtonsScroll = Instance.new("ScrollingFrame")
 local CopyCodeButton = Instance.new("TextButton")
@@ -276,17 +302,17 @@ local WhileLoopButton = Instance.new("TextButton")
 local CopyReturnValueButton = Instance.new("TextButton")
 local ClearLogsButton = Instance.new("TextButton")
 local UnstackRemoteButton = Instance.new("TextButton")
-local CopyFullPathButton = Instance.new("TextButton") -- Tombol baru
+local CopyFullPathButton = Instance.new("TextButton") 
 
 local OpenInfoFrameButton = Instance.new("TextButton")
 local MinimizeButton = Instance.new("TextButton")
-local FrameDivider = Instance.new("Frame")
+-- local FrameDivider = Instance.new("Frame") -- Tidak digunakan di layout baru
 
 -- Fitur Tambahan GUI
-local FilterTextBox = Instance.new("TextBox") -- Kotak filter
+local FilterTextBox = Instance.new("TextBox") 
 local SaveSessionButton = Instance.new("TextButton")
 local LoadSessionButton = Instance.new("TextButton")
-local UnstackAllButton = Instance.new("TextButton") -- Tombol baru
+local UnstackAllButton = Instance.new("TextButton") 
 
 -- Pengaturan Hook GUI
 local HookSettingsFrame = Instance.new("Frame")
@@ -294,7 +320,7 @@ local ToggleFireServerHookButton = Instance.new("TextButton")
 local ToggleInvokeServerHookButton = Instance.new("TextButton")
 local ToggleNamecallHookButton = Instance.new("TextButton")
 
--- Remote browser (seperti aslinya, dengan sedikit perbaikan)
+-- Remote browser 
 local BrowserHeader = Instance.new("Frame")
 local BrowserHeaderFrame = Instance.new("Frame")
 local BrowserHeaderText = Instance.new("TextLabel")
@@ -303,24 +329,27 @@ local RemoteBrowserFrame = Instance.new("ScrollingFrame")
 local RemoteButtonBrowserTemplate = Instance.new("TextButton")
 local RemoteNameBrowserTemplate = Instance.new("TextLabel")
 local RemoteIconBrowserTemplate = Instance.new("ImageLabel")
-local OpenBrowserButton = Instance.new("ImageButton") -- Tombol untuk membuka browser
+local OpenBrowserButton = Instance.new("ImageButton") 
 
 -- Fungsi Parent GUI yang Ditingkatkan
 local function ParentGUI(guiInstance)
     if isSynapseLoaded and syn.protect_gui then
         syn.protect_gui(guiInstance)
         guiInstance.Parent = CoreGui
-    elseif isProtoSmasherLoaded and get_hidden_gui then
+    elseif isProtoSmasherLoaded and get_hidden_gui then -- ProtoSmasher
         guiInstance.Parent = get_hidden_gui()
-    else
-        guiInstance.Parent = CoreGui -- Fallback ke CoreGui
+    elseif isArceusXDetected then -- Arceus X
+        -- Arceus X biasanya langsung parent ke CoreGui
+        guiInstance.Parent = CoreGui
+    else -- Fallback ke CoreGui
+        guiInstance.Parent = CoreGui
     end
 end
 
 -- Inisialisasi GUI Utama
 TurtleSpyGUI.Name = "TurtleSpyGUI_V2"
-TurtleSpyGUI.ResetPlayerGuiOnSpawn = false
-TurtleSpyGUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling -- Untuk konsistensi ZIndex
+-- TurtleSpyGUI.ResetPlayerGuiOnSpawn = false -- DIHAPUS: Menyebabkan error di Arceus X
+TurtleSpyGUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling 
 ParentGUI(TurtleSpyGUI)
 
 -- Fungsi untuk membuat UI (untuk menjaga kerapian)
@@ -328,10 +357,10 @@ local function CreateUI()
     mainFrame.Name = "mainFrame"
     mainFrame.Parent = TurtleSpyGUI
     mainFrame.BackgroundColor3 = colorSettings["Main"]["MainBackgroundColor"]
-    mainFrame.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"] -- Sedikit border
+    mainFrame.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"] 
     mainFrame.BorderSizePixel = 1
-    mainFrame.Position = UDim2.new(0.1, 0, 0.15, 0) -- Posisi awal yang lebih baik
-    mainFrame.Size = UDim2.new(0, 220, 0, 35) -- Sedikit lebih lebar
+    mainFrame.Position = UDim2.new(0.1, 0, 0.15, 0) 
+    mainFrame.Size = UDim2.new(0, 220, 0, 35) 
     mainFrame.ZIndex = 1000
     mainFrame.Active = true
     mainFrame.Draggable = true
@@ -343,18 +372,18 @@ local function CreateUI()
     Header.Size = UDim2.new(1, 0, 0, 26)
     Header.ZIndex = 1001
 
-    HeaderShading.Name = "HeaderShading" -- Ini sebenarnya background untuk teks header
+    HeaderShading.Name = "HeaderShading" 
     HeaderShading.Parent = Header
     HeaderShading.BackgroundColor3 = colorSettings["Main"]["HeaderShadingColor"]
     HeaderShading.BorderSizePixel = 0
-    HeaderShading.Position = UDim2.new(0, 0, 1, -1) -- Bayangan tipis di bawah header
+    HeaderShading.Position = UDim2.new(0, 0, 1, -1) 
     HeaderShading.Size = UDim2.new(1, 0, 0, 1)
-    HeaderShading.ZIndex = 1000 -- Di bawah teks header
+    HeaderShading.ZIndex = 1000 
 
     HeaderTextLabel.Name = "HeaderTextLabel"
     HeaderTextLabel.Parent = Header
     HeaderTextLabel.BackgroundTransparency = 1.000
-    HeaderTextLabel.Size = UDim2.new(1, -80, 1, 0) -- Sisakan ruang untuk tombol
+    HeaderTextLabel.Size = UDim2.new(1, -80, 1, 0) 
     HeaderTextLabel.Position = UDim2.new(0, 5, 0, 0)
     HeaderTextLabel.ZIndex = 1002
     HeaderTextLabel.Font = Enum.Font.SourceSansSemibold
@@ -363,7 +392,6 @@ local function CreateUI()
     HeaderTextLabel.TextSize = 16.000
     HeaderTextLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- Tombol Minimize, OpenInfo, OpenBrowser di Header
     MinimizeButton.Name = "MinimizeButton"
     MinimizeButton.Parent = Header
     MinimizeButton.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
@@ -396,16 +424,15 @@ local function CreateUI()
     OpenBrowserButton.Position = UDim2.new(1, -25, 0, 2)
     OpenBrowserButton.Size = UDim2.new(0, 22, 0, 22)
     OpenBrowserButton.ZIndex = 1003
-    OpenBrowserButton.Image = "rbxassetid://169476802" -- Icon kaca pembesar
+    OpenBrowserButton.Image = "rbxassetid://169476802" 
     OpenBrowserButton.ImageColor3 = colorSettings["Main"]["HeaderTextColor"]
     OpenBrowserButton.ScaleType = Enum.ScaleType.Fit
 
-    -- Filter TextBox
     FilterTextBox.Name = "FilterTextBox"
     FilterTextBox.Parent = mainFrame
     FilterTextBox.BackgroundColor3 = colorSettings["Main"]["InputBackgroundColor"]
     FilterTextBox.BorderColor3 = colorSettings["Main"]["InputBorderColor"]
-    FilterTextBox.Position = UDim2.new(0.05, 0, 1, 5) -- Di bawah header
+    FilterTextBox.Position = UDim2.new(0.05, 0, 1, 5) 
     FilterTextBox.Size = UDim2.new(0.9, 0, 0, 25)
     FilterTextBox.ZIndex = 1001
     FilterTextBox.Font = Enum.Font.SourceSans
@@ -420,23 +447,22 @@ local function CreateUI()
     RemoteScrollFrame.BackgroundColor3 = colorSettings["Main"]["MainBackgroundColor"]
     RemoteScrollFrame.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"]
     RemoteScrollFrame.BorderSizePixel = 1
-    RemoteScrollFrame.Position = UDim2.new(0, 0, 1, 35) -- Di bawah filter box
-    RemoteScrollFrame.Size = UDim2.new(1, 0, 0, 286) -- Ukuran default
+    RemoteScrollFrame.Position = UDim2.new(0, 0, 1, 35) 
+    RemoteScrollFrame.Size = UDim2.new(1, 0, 0, 286) 
     RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollSizeOffset)
     RemoteScrollFrame.ScrollBarThickness = 8
     RemoteScrollFrame.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Left
     RemoteScrollFrame.ScrollBarImageColor3 = colorSettings["Main"]["ScrollBarImageColor"]
     RemoteScrollFrame.ZIndex = 1000
 
-    -- Template untuk Tombol Remote (tidak diparent, hanya untuk clone)
     RemoteButtonTemplate.Name = "RemoteButtonTemplate"
     RemoteButtonTemplate.BackgroundColor3 = colorSettings["RemoteButtons"]["BackgroundColor"]
     RemoteButtonTemplate.BorderColor3 = colorSettings["RemoteButtons"]["BorderColor"]
-    RemoteButtonTemplate.Size = UDim2.new(1, -10, 0, 28) -- Lebih tinggi sedikit
+    RemoteButtonTemplate.Size = UDim2.new(1, -10, 0, 28) 
     RemoteButtonTemplate.Font = Enum.Font.SourceSans
     RemoteButtonTemplate.Text = ""
     RemoteButtonTemplate.TextColor3 = colorSettings["RemoteButtons"]["TextColor"]
-    RemoteButtonTemplate.TextSize = 1.000 -- Teks utama tidak terlihat, info di label anak
+    RemoteButtonTemplate.TextSize = 1.000 
     RemoteButtonTemplate.TextWrapped = true
     RemoteButtonTemplate.TextXAlignment = Enum.TextXAlignment.Left
     RemoteButtonTemplate.ZIndex = 1001
@@ -445,7 +471,7 @@ local function CreateUI()
     NumberLabelTemplate.Parent = RemoteButtonTemplate
     NumberLabelTemplate.BackgroundTransparency = 1.000
     NumberLabelTemplate.Position = UDim2.new(0, 5, 0, 0)
-    NumberLabelTemplate.Size = UDim2.new(0, 30, 1, 0) -- Lebar dinamis nanti
+    NumberLabelTemplate.Size = UDim2.new(0, 30, 1, 0) 
     NumberLabelTemplate.ZIndex = 1002
     NumberLabelTemplate.Font = Enum.Font.SourceSans
     NumberLabelTemplate.Text = "1"
@@ -456,8 +482,8 @@ local function CreateUI()
     RemoteNameLabelTemplate.Name = "RemoteNameLabel"
     RemoteNameLabelTemplate.Parent = RemoteButtonTemplate
     RemoteNameLabelTemplate.BackgroundTransparency = 1.000
-    RemoteNameLabelTemplate.Position = UDim2.new(0, 30, 0, 0) -- Disesuaikan berdasarkan NumberLabel
-    RemoteNameLabelTemplate.Size = UDim2.new(1, -60, 1, 0) -- Sisa ruang dikurangi ikon
+    RemoteNameLabelTemplate.Position = UDim2.new(0, 30, 0, 0) 
+    RemoteNameLabelTemplate.Size = UDim2.new(1, -60, 1, 0) 
     RemoteNameLabelTemplate.Font = Enum.Font.SourceSansSemibold
     RemoteNameLabelTemplate.Text = "RemoteEventName"
     RemoteNameLabelTemplate.TextColor3 = colorSettings["RemoteButtons"]["TextColor"]
@@ -468,21 +494,20 @@ local function CreateUI()
     RemoteIconTemplate.Name = "RemoteIcon"
     RemoteIconTemplate.Parent = RemoteButtonTemplate
     RemoteIconTemplate.BackgroundTransparency = 1.000
-    RemoteIconTemplate.Position = UDim2.new(1, -28, 0.5, -12) -- Kanan tengah
+    RemoteIconTemplate.Position = UDim2.new(1, -28, 0.5, -12) 
     RemoteIconTemplate.Size = UDim2.new(0, 24, 0, 24)
     RemoteIconTemplate.ZIndex = 1002
-    RemoteIconTemplate.Image = eventImage -- Default event
+    RemoteIconTemplate.Image = eventImage 
 
-    -- Info Frame
     InfoFrame.Name = "InfoFrame"
     InfoFrame.Parent = mainFrame
     InfoFrame.BackgroundColor3 = colorSettings["Main"]["InfoScrollingFrameBgColor"]
     InfoFrame.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"]
     InfoFrame.BorderSizePixel = 1
-    InfoFrame.Position = UDim2.new(1, 5, 0, 0) -- Di kanan mainFrame
-    InfoFrame.Size = UDim2.new(0, 380, 1, 0) -- Ukuran lebih besar untuk info
+    InfoFrame.Position = UDim2.new(1, 5, 0, 0) 
+    InfoFrame.Size = UDim2.new(0, 380, 1, 0) 
     InfoFrame.Visible = false
-    InfoFrame.ZIndex = 999 -- Di bawah mainFrame jika tidak aktif, di atas jika aktif
+    InfoFrame.ZIndex = 999 
     InfoFrame.ClipsDescendants = true
 
     InfoFrameHeader.Name = "InfoFrameHeader"
@@ -492,7 +517,7 @@ local function CreateUI()
     InfoFrameHeader.Size = UDim2.new(1, 0, 0, 26)
     InfoFrameHeader.ZIndex = 1011
 
-    InfoTitleShading.Name = "InfoTitleShading" -- Background untuk teks header info
+    InfoTitleShading.Name = "InfoTitleShading" 
     InfoTitleShading.Parent = InfoFrameHeader
     InfoTitleShading.BackgroundColor3 = colorSettings["Main"]["HeaderShadingColor"]
     InfoTitleShading.BorderSizePixel = 0
@@ -533,7 +558,7 @@ local function CreateUI()
     CodeFrame.Position = UDim2.new(0.025, 0, 0, 30)
     CodeFrame.Size = UDim2.new(0.95, 0, 0, 65)
     CodeFrame.ZIndex = 1010
-    CodeFrame.CanvasSize = UDim2.new(2, 0, 1, 0) -- Horizontal scroll
+    CodeFrame.CanvasSize = UDim2.new(2, 0, 1, 0) 
     CodeFrame.ScrollBarThickness = 6
     CodeFrame.ScrollingDirection = Enum.ScrollingDirection.X
     CodeFrame.ScrollBarImageColor3 = colorSettings["Main"]["ScrollBarImageColor"]
@@ -542,9 +567,9 @@ local function CreateUI()
     CodeCommentTextLabel.Parent = CodeFrame
     CodeCommentTextLabel.BackgroundTransparency = 1.000
     CodeCommentTextLabel.Position = UDim2.new(0, 5, 0, 2)
-    CodeCommentTextLabel.Size = UDim2.new(0, 10000, 0, 18) -- Sangat lebar untuk teks panjang
+    CodeCommentTextLabel.Size = UDim2.new(0, 10000, 0, 18) 
     CodeCommentTextLabel.ZIndex = 1011
-    CodeCommentTextLabel.Font = Enum.Font.Code -- Font Monospace
+    CodeCommentTextLabel.Font = Enum.Font.Code 
     CodeCommentTextLabel.Text = "-- Script generated by TurtleSpy V2, enhanced by Gemini. Original by Intrer#0421"
     CodeCommentTextLabel.TextColor3 = colorSettings["Code"]["CreditsColor"]
     CodeCommentTextLabel.TextSize = 13.000
@@ -554,26 +579,25 @@ local function CreateUI()
     CodeTextLabel.Parent = CodeFrame
     CodeTextLabel.BackgroundTransparency = 1.000
     CodeTextLabel.Position = UDim2.new(0, 5, 0, 20)
-    CodeTextLabel.Size = UDim2.new(0, 10000, 0, 40) -- Tinggi disesuaikan
+    CodeTextLabel.Size = UDim2.new(0, 10000, 0, 40) 
     CodeTextLabel.ZIndex = 1011
     CodeTextLabel.Font = Enum.Font.Code
     CodeTextLabel.Text = "game:GetService('ReplicatedStorage').RemoteEvent:FireServer(...)"
     CodeTextLabel.TextColor3 = colorSettings["Code"]["TextColor"]
     CodeTextLabel.TextSize = 14.000
-    CodeTextLabel.TextWrapped = false -- Biarkan horizontal scroll menangani
+    CodeTextLabel.TextWrapped = false 
     CodeTextLabel.TextXAlignment = Enum.TextXAlignment.Left
     CodeTextLabel.ClipsDescendants = false
 
-    -- Argument Editor Frame
     ArgumentEditorFrame.Name = "ArgumentEditorFrame"
     ArgumentEditorFrame.Parent = InfoFrame
     ArgumentEditorFrame.BackgroundColor3 = colorSettings["Code"]["BackgroundColor"]
     ArgumentEditorFrame.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"]
     ArgumentEditorFrame.BorderSizePixel = 1
-    ArgumentEditorFrame.Position = UDim2.new(0.025, 0, 0, 100) -- Di bawah CodeFrame
-    ArgumentEditorFrame.Size = UDim2.new(0.95, 0, 0, 100) -- Ukuran untuk editor
+    ArgumentEditorFrame.Position = UDim2.new(0.025, 0, 0, 100) 
+    ArgumentEditorFrame.Size = UDim2.new(0.95, 0, 0, 100) 
     ArgumentEditorFrame.ZIndex = 1010
-    ArgumentEditorFrame.Visible = true -- Selalu terlihat jika InfoFrame visible
+    ArgumentEditorFrame.Visible = true 
 
     ArgumentEditorLabel.Name = "ArgumentEditorLabel"
     ArgumentEditorLabel.Parent = ArgumentEditorFrame
@@ -592,7 +616,7 @@ local function CreateUI()
     ArgumentEditorTextBox.BackgroundColor3 = colorSettings["Main"]["InputBackgroundColor"]
     ArgumentEditorTextBox.BorderColor3 = colorSettings["Main"]["InputBorderColor"]
     ArgumentEditorTextBox.Position = UDim2.new(0.025, 0, 0, 20)
-    ArgumentEditorTextBox.Size = UDim2.new(0.95, 0, 1, -50) -- Sisa ruang dikurangi tombol
+    ArgumentEditorTextBox.Size = UDim2.new(0.95, 0, 1, -50) 
     ArgumentEditorTextBox.ZIndex = 1011
     ArgumentEditorTextBox.Font = Enum.Font.Code
     ArgumentEditorTextBox.Text = "{}"
@@ -608,7 +632,7 @@ local function CreateUI()
     ApplyArgumentsButton.Parent = ArgumentEditorFrame
     ApplyArgumentsButton.BackgroundColor3 = colorSettings["MainButtons"]["BackgroundColor"]
     ApplyArgumentsButton.BorderColor3 = colorSettings["MainButtons"]["BorderColor"]
-    ApplyArgumentsButton.Position = UDim2.new(0.5, -50, 1, -28) -- Di bawah TextBox
+    ApplyArgumentsButton.Position = UDim2.new(0.5, -50, 1, -28) 
     ApplyArgumentsButton.Size = UDim2.new(0, 100, 0, 22)
     ApplyArgumentsButton.ZIndex = 1012
     ApplyArgumentsButton.Font = Enum.Font.SourceSans
@@ -616,16 +640,15 @@ local function CreateUI()
     ApplyArgumentsButton.TextColor3 = colorSettings["MainButtons"]["TextColor"]
     ApplyArgumentsButton.TextSize = 13.000
 
-    -- Info Buttons Scroll
     InfoButtonsScroll.Name = "InfoButtonsScroll"
     InfoButtonsScroll.Parent = InfoFrame
     InfoButtonsScroll.Active = true
     InfoButtonsScroll.BackgroundColor3 = colorSettings["Main"]["InfoScrollingFrameBgColor"]
     InfoButtonsScroll.BorderSizePixel = 0
-    InfoButtonsScroll.Position = UDim2.new(0.025, 0, 0, 205) -- Di bawah ArgumentEditorFrame
-    InfoButtonsScroll.Size = UDim2.new(0.95, 0, 1, -210) -- Sisa ruang
+    InfoButtonsScroll.Position = UDim2.new(0.025, 0, 0, 205) 
+    InfoButtonsScroll.Size = UDim2.new(0.95, 0, 1, -210) 
     InfoButtonsScroll.ZIndex = 1009
-    InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 2, 0) -- Dibuat lebih panjang untuk banyak tombol
+    InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 2, 0) 
     InfoButtonsScroll.ScrollBarThickness = 8
     InfoButtonsScroll.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Left
     InfoButtonsScroll.ScrollBarImageColor3 = colorSettings["Main"]["ScrollBarImageColor"]
@@ -652,7 +675,7 @@ local function CreateUI()
 
     CopyCodeButton = createInfoButton("CopyCodeButton", "Salin Kode", buttonYOffset)
     buttonYOffset = buttonYOffset + buttonHeight + buttonSpacing
-    RunCodeButton = createInfoButton("RunCodeButton", "Jalankan Kode Asli", buttonYOffset) -- Diubah teksnya
+    RunCodeButton = createInfoButton("RunCodeButton", "Jalankan Kode Asli", buttonYOffset) 
     buttonYOffset = buttonYOffset + buttonHeight + buttonSpacing
     CopyScriptPathButton = createInfoButton("CopyScriptPathButton", "Salin Path Script Pemanggil", buttonYOffset)
     buttonYOffset = buttonYOffset + buttonHeight + buttonSpacing
@@ -669,9 +692,8 @@ local function CreateUI()
     WhileLoopButton = createInfoButton("WhileLoopButton", "Buat Skrip While Loop", buttonYOffset)
     buttonYOffset = buttonYOffset + buttonHeight + buttonSpacing
     CopyReturnValueButton = createInfoButton("CopyReturnValueButton", "Jalankan & Salin Return (Fungsi)", buttonYOffset)
-    CopyReturnValueButton.Visible = false -- Hanya untuk RemoteFunction
+    CopyReturnValueButton.Visible = false 
     
-    -- Tombol global di bawah RemoteScrollFrame
     local globalButtonY = 5
     ClearLogsButton.Name = "ClearLogsButton"
     ClearLogsButton.Parent = mainFrame
@@ -723,17 +745,16 @@ local function CreateUI()
     LoadSessionButton.TextColor3 = colorSettings["MainButtons"]["TextColor"]
     LoadSessionButton.TextSize = 13.000
 
-    globalButtonY = globalButtonY + 25 + 10 -- Spasi untuk Hook Settings
+    globalButtonY = globalButtonY + 25 + 10 
 
-    -- Hook Settings Frame (di bawah tombol global)
     HookSettingsFrame.Name = "HookSettingsFrame"
     HookSettingsFrame.Parent = mainFrame
     HookSettingsFrame.BackgroundTransparency = 1.0
     HookSettingsFrame.Position = UDim2.new(0.05, 0, 1, RemoteScrollFrame.Size.Y.Offset + FilterTextBox.Size.Y.Offset + globalButtonY + 40)
     HookSettingsFrame.Size = UDim2.new(0.9, 0, 0, 30)
     HookSettingsFrame.ZIndex = 1001
-    HookSettingsFrame.Layout = Enum.FillDirection.Horizontal
-    HookSettingsFrame.LayoutOrder = 1
+    -- HookSettingsFrame.Layout = Enum.FillDirection.Horizontal -- Ini salah, harusnya UIListLayout
+    -- HookSettingsFrame.LayoutOrder = 1 -- Tidak relevan tanpa UIListLayout di sini
     local ListLayout = Instance.new("UIListLayout", HookSettingsFrame)
     ListLayout.FillDirection = Enum.FillDirection.Horizontal
     ListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -748,13 +769,13 @@ local function CreateUI()
         button.Parent = HookSettingsFrame
         button.BackgroundColor3 = initialActive and Color3.fromRGB(76, 209, 55) or colorSettings["MainButtons"]["BackgroundColor"]
         button.BorderColor3 = colorSettings["MainButtons"]["BorderColor"]
-        button.Size = UDim2.new(0.31, 0, 1, 0) -- Bagi rata
+        button.Size = UDim2.new(0.31, 0, 1, 0) 
         button.Font = Enum.Font.SourceSans
         button.Text = text .. (initialActive and " (Aktif)" or " (Nonaktif)")
         button.TextColor3 = colorSettings["MainButtons"]["TextColor"]
         button.TextSize = 11.000
         button.ZIndex = 1002
-        button._isActive = initialActive -- Properti custom
+        button._isActive = initialActive 
         return button
     end
 
@@ -762,22 +783,20 @@ local function CreateUI()
     ToggleInvokeServerHookButton = createHookToggleButton("ToggleInvokeServerHook", "InvokeServer", true)
     ToggleNamecallHookButton = createHookToggleButton("ToggleNamecallHook", "Namecall", true)
     
-    -- Sesuaikan tinggi mainFrame untuk mengakomodasi tombol baru
     local totalBottomUIHeight = FilterTextBox.Size.Y.Offset + 5 + RemoteScrollFrame.Size.Y.Offset + 5 + ClearLogsButton.Size.Y.Offset + 5 + SaveSessionButton.Size.Y.Offset + 5 + HookSettingsFrame.Size.Y.Offset + 10
-    mainFrame.Size = UDim2.new(0, 220, 0, 35 + totalBottomUIHeight) -- Header + Konten Bawah
+    mainFrame.Size = UDim2.new(0, 220, 0, 35 + totalBottomUIHeight) 
     RemoteScrollFrame.Size = UDim2.new(1,0,0, mainFrame.Size.Y.Offset - (35 + FilterTextBox.Size.Y.Offset + 5 + ClearLogsButton.Size.Y.Offset + 5 + SaveSessionButton.Size.Y.Offset + 5 + HookSettingsFrame.Size.Y.Offset + 10))
 
-    -- Browser Remote
     BrowserHeader.Name = "BrowserHeader"
     BrowserHeader.Parent = TurtleSpyGUI
     BrowserHeader.BackgroundColor3 = colorSettings["Main"]["HeaderShadingColor"]
     BrowserHeader.BorderColor3 = colorSettings["Main"]["HeaderShadingColor"]
-    BrowserHeader.Position = UDim2.new(0.5, -103, 0.1, 0) -- Tengah, sedikit ke atas
+    BrowserHeader.Position = UDim2.new(0.5, -103, 0.1, 0) 
     BrowserHeader.Size = UDim2.new(0, 207, 0, 33)
     BrowserHeader.ZIndex = 1999
     BrowserHeader.Active = true
     BrowserHeader.Draggable = true
-    BrowserHeader.Visible = false -- Sembunyikan secara default
+    BrowserHeader.Visible = false 
 
     BrowserHeaderFrame.Name = "BrowserHeaderFrame"
     BrowserHeaderFrame.Parent = BrowserHeader
@@ -824,7 +843,6 @@ local function CreateUI()
     RemoteBrowserFrame.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Left
     RemoteBrowserFrame.ScrollBarImageColor3 = colorSettings["Main"]["ScrollBarImageColor"]
 
-    -- Template untuk tombol di browser (jangan diparent)
     RemoteButtonBrowserTemplate.Name = "RemoteButtonBrowserTemplate"
     RemoteButtonBrowserTemplate.BackgroundColor3 = colorSettings["RemoteButtons"]["BackgroundColor"]
     RemoteButtonBrowserTemplate.BorderColor3 = colorSettings["RemoteButtons"]["BorderColor"]
@@ -854,17 +872,21 @@ local function CreateUI()
     RemoteIconBrowserTemplate.ZIndex = 2001
     RemoteIconBrowserTemplate.Image = eventImage
 end
-CreateUI() -- Panggil fungsi untuk membuat UI
+CreateUI() 
 
 -- Variabel Status GUI
 local isInfoFrameOpen = false
 local isMainFrameMinimized = false
-local currentRemoteLookingAt = nil -- Instance remote yang sedang dilihat di InfoFrame
-local currentRemoteDataKey = nil -- Kunci untuk remoteData yang sedang dilihat
+local currentRemoteLookingAt = nil 
+local currentRemoteDataKey = nil 
 
 -- Fungsi Utilitas GUI
+local function IsValid(instance) -- Fungsi IsValid sederhana jika tidak ada di environment
+    return instance and instance.Parent ~= nil
+end
+
 local function ButtonEffect(button, text, success)
-    if not IsValid(button) then return end
+    if not button or not IsValid(button) then return end
     local originalText = button.Text
     local originalColor = button.TextColor3
     local originalBgColor = button.BackgroundColor3
@@ -872,16 +894,16 @@ local function ButtonEffect(button, text, success)
     button.Text = text or "Berhasil!"
     if success == true then
         button.TextColor3 = Color3.fromRGB(255, 255, 255)
-        button.BackgroundColor3 = Color3.fromRGB(76, 209, 55) -- Hijau untuk sukses
+        button.BackgroundColor3 = Color3.fromRGB(76, 209, 55) 
     elseif success == false then
         button.TextColor3 = Color3.fromRGB(255, 255, 255)
-        button.BackgroundColor3 = Color3.fromRGB(232, 65, 24) -- Merah untuk gagal
-    else -- Netral/default
-        button.TextColor3 = Color3.fromRGB(76, 209, 55) -- Tetap hijau untuk "Copied!"
+        button.BackgroundColor3 = Color3.fromRGB(232, 65, 24) 
+    else 
+        button.TextColor3 = Color3.fromRGB(76, 209, 55) 
     end
     
     delay(1.2, function()
-        if IsValid(button) then
+        if button and IsValid(button) then
             button.Text = originalText
             button.TextColor3 = originalColor
             button.BackgroundColor3 = originalBgColor
@@ -891,10 +913,10 @@ end
 
 local function UpdateInfoFrame(remoteInstance, dataKey)
     if not remoteInstance or not IsValid(remoteInstance) or not remoteData[dataKey] then
-        InfoFrame.Visible = false
+        if InfoFrame and IsValid(InfoFrame) then InfoFrame.Visible = false end
         isInfoFrameOpen = false
-        OpenInfoFrameButton.Text = ">"
-        mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset, 0, mainFrame.Size.Y.Offset) -- Pertahankan lebar
+        if OpenInfoFrameButton and IsValid(OpenInfoFrameButton) then OpenInfoFrameButton.Text = ">" end
+        -- mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset, 0, mainFrame.Size.Y.Offset) -- Pertahankan lebar
         currentRemoteLookingAt = nil
         currentRemoteDataKey = nil
         return
@@ -904,58 +926,60 @@ local function UpdateInfoFrame(remoteInstance, dataKey)
     currentRemoteDataKey = dataKey
     local data = remoteData[dataKey]
 
-    InfoHeaderText.Text = "Info: " .. remoteInstance.Name
+    if InfoHeaderText and IsValid(InfoHeaderText) then InfoHeaderText.Text = "Info: " .. remoteInstance.Name end
     local isFunc = remoteInstance:IsA("RemoteFunction")
-    CopyReturnValueButton.Visible = isFunc
+    if CopyReturnValueButton and IsValid(CopyReturnValueButton) then CopyReturnValueButton.Visible = isFunc end
     
     local fireMethod = isFunc and ":InvokeServer(" or ":FireServer("
-    local currentArgs = data.argsHistory[#data.argsHistory] -- Ambil argumen terbaru
+    local currentArgs = data.argsHistory[#data.argsHistory] 
     
     local success, codeStr = pcall(convertTableToString, currentArgs, true)
-    if not success then codeStr = "{ --[[ Error converting args ]] }" end
+    if not success then codeStr = "{ --[[ Error converting args: " .. tostring(codeStr) .. " ]] }" end
 
-    CodeTextLabel.Text = GetFullPathOfAnInstance(remoteInstance) .. fireMethod .. codeStr .. ")"
+    if CodeTextLabel and IsValid(CodeTextLabel) then CodeTextLabel.Text = GetFullPathOfAnInstance(remoteInstance) .. fireMethod .. codeStr .. ")" end
     
-    local successArgsEdit, argsEditStr = pcall(convertTableToString, currentArgs, true, 2) -- Indentasi 2 untuk editor
-    if not successArgsEdit then argsEditStr = "{ --[[ Error converting args ]] }" end
-    ArgumentEditorTextBox.Text = argsEditStr
+    local successArgsEdit, argsEditStr = pcall(convertTableToString, currentArgs, true, 2) 
+    if not successArgsEdit then argsEditStr = "{ --[[ Error converting args: " .. tostring(argsEditStr) .. " ]] }" end
+    if ArgumentEditorTextBox and IsValid(ArgumentEditorTextBox) then ArgumentEditorTextBox.Text = argsEditStr end
 
-    -- Update ukuran CodeTextLabel dan CodeFrame Canvas
-    local textSize = TextService:GetTextSize(CodeTextLabel.Text, CodeTextLabel.TextSize, CodeTextLabel.Font, Vector2.new(math.huge, CodeTextLabel.AbsoluteSize.Y))
-    CodeTextLabel.Size = UDim2.new(0, textSize.X + 20, 0, CodeTextLabel.Size.Y.Offset) -- Tambahkan padding
-    CodeFrame.CanvasSize = UDim2.new(0, textSize.X + 30, 0, CodeFrame.CanvasSize.Y.Scale > 0 and CodeFrame.CanvasSize.Y.Scale or 1) -- Jaga Y scale jika ada
+    if CodeTextLabel and IsValid(CodeTextLabel) and TextService and IsValid(TextService) and CodeFrame and IsValid(CodeFrame) then
+        local textSize = TextService:GetTextSize(CodeTextLabel.Text, CodeTextLabel.TextSize, CodeTextLabel.Font, Vector2.new(math.huge, CodeTextLabel.AbsoluteSize.Y))
+        CodeTextLabel.Size = UDim2.new(0, textSize.X + 20, 0, CodeTextLabel.Size.Y.Offset) 
+        CodeFrame.CanvasSize = UDim2.new(0, textSize.X + 30, 0, CodeFrame.CanvasSize.Y.Scale > 0 and CodeFrame.CanvasSize.Y.Scale or 1) 
+    end
 
-    -- Update tombol Ignore/Block/Unstack
-    IgnoreRemoteButton.Text = table.find(IgnoreList, remoteInstance) and "Berhenti Mengabaikan" or "Abaikan Remote Ini"
-    IgnoreRemoteButton.TextColor3 = table.find(IgnoreList, remoteInstance) and Color3.fromRGB(251, 197, 49) or colorSettings["MainButtons"]["TextColor"]
+    if IgnoreRemoteButton and IsValid(IgnoreRemoteButton) then
+        IgnoreRemoteButton.Text = table.find(IgnoreList, remoteInstance) and "Berhenti Mengabaikan" or "Abaikan Remote Ini"
+        IgnoreRemoteButton.TextColor3 = table.find(IgnoreList, remoteInstance) and Color3.fromRGB(251, 197, 49) or colorSettings["MainButtons"]["TextColor"]
+    end
+    if BlockRemoteButton and IsValid(BlockRemoteButton) then
+        BlockRemoteButton.Text = table.find(BlockList, remoteInstance) and "Buka Blokir Remote" or "Blokir Remote Ini"
+        BlockRemoteButton.TextColor3 = table.find(BlockList, remoteInstance) and Color3.fromRGB(251, 197, 49) or colorSettings["MainButtons"]["TextColor"]
+    end
+    if UnstackRemoteButton and IsValid(UnstackRemoteButton) then
+        UnstackRemoteButton.Text = table.find(unstackedRemotes, remoteInstance) and "Stack Remote Ini" or "Unstack Remote (Argumen Baru)"
+        UnstackRemoteButton.TextColor3 = table.find(unstackedRemotes, remoteInstance) and Color3.fromRGB(251, 197, 49) or colorSettings["MainButtons"]["TextColor"]
+    end
 
-    BlockRemoteButton.Text = table.find(BlockList, remoteInstance) and "Buka Blokir Remote" or "Blokir Remote Ini"
-    BlockRemoteButton.TextColor3 = table.find(BlockList, remoteInstance) and Color3.fromRGB(251, 197, 49) or colorSettings["MainButtons"]["TextColor"]
-
-    UnstackRemoteButton.Text = table.find(unstackedRemotes, remoteInstance) and "Stack Remote Ini" or "Unstack Remote (Argumen Baru)"
-    UnstackRemoteButton.TextColor3 = table.find(unstackedRemotes, remoteInstance) and Color3.fromRGB(251, 197, 49) or colorSettings["MainButtons"]["TextColor"]
-
-    if not isInfoFrameOpen then
+    if not isInfoFrameOpen and InfoFrame and IsValid(InfoFrame) and mainFrame and IsValid(mainFrame) and OpenInfoFrameButton and IsValid(OpenInfoFrameButton) then
         InfoFrame.Visible = true
         isInfoFrameOpen = true
         OpenInfoFrameButton.Text = "<"
         mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset + InfoFrame.Size.X.Offset + 5, 0, mainFrame.Size.Y.Offset)
-        InfoFrame.ZIndex = 1000 -- Bawa ke depan
+        InfoFrame.ZIndex = 1000 
     end
 end
 
--- Fungsi untuk mengonversi tabel ke string Lua yang dapat dibaca (ditingkatkan)
 function convertTableToString(tbl, prettyPrint, indentLevel, visited)
-    if type(tbl) ~= "table" then
-        if type(tbl) == "string" then
-            return '"' .. tbl:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n") .. '"'
-        elseif type(tbl) == "Instance" and IsValid(tbl) then
-            return GetFullPathOfAnInstance(tbl)
-        elseif type(tbl) == "Instance" and not IsValid(tbl) then
-            return "nil --[[ Instance dihancurkan ]]"
-        elseif type(tbl) == "EnumItem" then
+    local typeTbl = type(tbl)
+    if typeTbl ~= "table" then
+        if typeTbl == "string" then
+            return '"' .. tbl:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n"):gsub("\r", "\\r") .. '"'
+        elseif typeTbl == "Instance" then
+            return IsValid(tbl) and GetFullPathOfAnInstance(tbl) or "nil --[[ Instance dihancurkan ]]"
+        elseif typeTbl == "EnumItem" then
             return "Enum." .. tbl.EnumType.Name .. "." .. tbl.Name
-        elseif type(tbl) == "nil" then
+        elseif typeTbl == "nil" then
             return "nil"
         else
             return tostring(tbl)
@@ -964,7 +988,7 @@ function convertTableToString(tbl, prettyPrint, indentLevel, visited)
 
     visited = visited or {}
     if visited[tbl] then
-        return "{ --[[ Referensi siklik ]] }"
+        return "{ --[[ Referensi siklik detectée ]] }"
     end
     visited[tbl] = true
 
@@ -975,58 +999,61 @@ function convertTableToString(tbl, prettyPrint, indentLevel, visited)
     local newLine = prettyPrint and "\n" or ""
     local space = prettyPrint and " " or ""
 
-    -- Cek apakah tabel adalah array-like
-    local isArrayLike = true
-    local maxNumericIndex = 0
-    for k, _ in pairs(tbl) do
-        if type(k) == "number" and k >= 1 and math.floor(k) == k then
-            maxNumericIndex = math.max(maxNumericIndex, k)
-        else
-            isArrayLike = false
-            break
+    local isArray = true
+    local count = 0
+    for _ in pairs(tbl) do count = count + 1 end
+    if count > 0 then -- Hanya cek jika tabel tidak kosong
+        for i = 1, count do
+            if tbl[i] == nil then isArray = false; break end
         end
+        if count ~= #tbl then isArray = false end -- Pastikan tidak ada kunci non-numerik jika ingin dianggap array
+    else
+        isArray = (#tbl == 0) -- Tabel kosong bisa jadi array atau dictionary
     end
-    if maxNumericIndex ~= #tbl then isArrayLike = false end
 
 
-    if isArrayLike then
+    if isArray then
         for i = 1, #tbl do
             if not first then str = str .. "," .. space end
             str = str .. newLine .. indentStr .. convertTableToString(tbl[i], prettyPrint, indentLevel + 1, visited)
             first = false
         end
-    else -- Mixed or dictionary-like table
+    else 
         for k, v in pairs(tbl) do
             if not first then str = str .. "," .. space end
             local keyStr
-            if type(k) == "string" and k:match("^[%a_][%w_]*$") then -- Valid identifier
+            if type(k) == "string" and k:match("^[%a_][%w_]*$") then 
                 keyStr = k
             else
-                keyStr = "[" .. convertTableToString(k, false, 0, {}) .. "]" -- Jangan pretty print kunci, jangan teruskan visited untuk kunci
+                keyStr = "[" .. convertTableToString(k, false, 0, {}) .. "]" 
             end
             str = str .. newLine .. indentStr .. keyStr .. space .. "=" .. space .. convertTableToString(v, prettyPrint, indentLevel + 1, visited)
             first = false
         end
     end
     
-    visited[tbl] = nil -- Hapus dari visited setelah selesai dengan tabel ini
+    visited[tbl] = nil 
 
-    str = str .. newLine .. (prettyPrint and #str > 1 and string.rep("  ", indentLevel) or "") .. "}"
+    str = str .. newLine .. (prettyPrint and count > 0 and string.rep("  ", indentLevel) or "") .. "}"
     return str
 end
 
--- Fungsi untuk mengonversi string argumen kembali ke tabel Lua
 local function parseArgumentsString(argsString)
     local success, func = pcall(loadstring, "return " .. argsString)
     if not success or not func then
-        warn("TurtleSpy: Gagal mem-parse string argumen:", func) -- func akan berisi pesan error dari loadstring
+        warn("TurtleSpy: Gagal mem-parse string argumen:", func) 
         return nil, "Error parsing: " .. (func or "unknown error")
     end
     
-    local setEnvSuccess, _ = pcall(setfenv, func, getfenv(0)) -- Berikan environment saat ini
+    local env = getfenv(0) -- Dapatkan environment saat ini
+    -- Tambahkan Enum ke environment jika belum ada (beberapa executor mungkin memerlukannya)
+    if not env.Enum then env.Enum = Enum end
+    if not env.game then env.game = game end -- Tambahkan game juga
+    if not env.workspace then env.workspace = workspace end
+
+    local setEnvSuccess, _ = pcall(setfenv, func, env) 
     if not setEnvSuccess then
         warn("TurtleSpy: Gagal mengatur environment untuk parser argumen.")
-        -- Lanjutkan saja, mungkin masih berfungsi untuk argumen sederhana
     end
 
     local execSuccess, result = pcall(func)
@@ -1035,94 +1062,106 @@ local function parseArgumentsString(argsString)
         return nil, "Error executing: " .. (result or "unknown error")
     end
     
-    if type(result) ~= "table" then -- Harusnya array argumen
-        if result == nil and argsString:match("^%s*nil%s*$") then return {}, nil end -- "nil" menjadi {}
-        if result == nil and argsString:match("^%s*%{%s*%}%s*$") then return {}, nil end -- "{}" menjadi {}
-        if type(result) ~= "nil" then -- Jika bukan nil, bungkus dalam tabel
+    if type(result) ~= "table" then 
+        if result == nil and argsString:match("^%s*nil%s*$") then return {}, nil end 
+        if result == nil and argsString:match("^%s*%{%s*%}%s*$") then return {}, nil end 
+        if type(result) ~= "nil" then 
              return {result}, nil
         end
-        return nil, "Hasil parsing bukan tabel dan bukan nil."
+        -- Jika string argumen adalah "nil" atau "{}" tapi result bukan tabel, ini bisa jadi masalah.
+        -- Namun, jika argsString valid dan menghasilkan non-table, itu adalah input user.
+        -- Kita kembalikan apa adanya jika bukan table dan bukan kasus nil/"{}" khusus di atas.
+        -- Jika result adalah nil dan bukan dari "nil" atau "{}", itu error.
+        return nil, "Hasil parsing bukan tabel yang valid."
     end
 
     return result, nil
 end
 
 
--- Event Handlers untuk Tombol GUI
 MinimizeButton.MouseButton1Click:Connect(function()
     isMainFrameMinimized = not isMainFrameMinimized
     if isMainFrameMinimized then
-        RemoteScrollFrame.Visible = false
-        FilterTextBox.Visible = false
-        ClearLogsButton.Visible = false
-        UnstackAllButton.Visible = false
-        SaveSessionButton.Visible = false
-        LoadSessionButton.Visible = false
-        HookSettingsFrame.Visible = false
+        if IsValid(RemoteScrollFrame) then RemoteScrollFrame.Visible = false end
+        if IsValid(FilterTextBox) then FilterTextBox.Visible = false end
+        if IsValid(ClearLogsButton) then ClearLogsButton.Visible = false end
+        if IsValid(UnstackAllButton) then UnstackAllButton.Visible = false end
+        if IsValid(SaveSessionButton) then SaveSessionButton.Visible = false end
+        if IsValid(LoadSessionButton) then LoadSessionButton.Visible = false end
+        if IsValid(HookSettingsFrame) then HookSettingsFrame.Visible = false end
         
-        local headerHeight = Header.AbsoluteSize.Y
-        mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset, 0, headerHeight)
-        MinimizeButton.Text = "O" -- Tanda untuk membuka
-        if isInfoFrameOpen then -- Jika info frame terbuka, sembunyikan juga
+        if IsValid(Header) and IsValid(mainFrame) then
+            local headerHeight = Header.AbsoluteSize.Y
+            mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset, 0, headerHeight)
+        end
+        if IsValid(MinimizeButton) then MinimizeButton.Text = "O" end
+        if isInfoFrameOpen and IsValid(InfoFrame) then 
             InfoFrame.Visible = false
         end
     else
-        RemoteScrollFrame.Visible = true
-        FilterTextBox.Visible = true
-        ClearLogsButton.Visible = true
-        UnstackAllButton.Visible = true
-        SaveSessionButton.Visible = true
-        LoadSessionButton.Visible = true
-        HookSettingsFrame.Visible = true
+        if IsValid(RemoteScrollFrame) then RemoteScrollFrame.Visible = true end
+        if IsValid(FilterTextBox) then FilterTextBox.Visible = true end
+        if IsValid(ClearLogsButton) then ClearLogsButton.Visible = true end
+        if IsValid(UnstackAllButton) then UnstackAllButton.Visible = true end
+        if IsValid(SaveSessionButton) then SaveSessionButton.Visible = true end
+        if IsValid(LoadSessionButton) then LoadSessionButton.Visible = true end
+        if IsValid(HookSettingsFrame) then HookSettingsFrame.Visible = true end
 
-        local totalBottomUIHeight = FilterTextBox.Size.Y.Offset + 5 + RemoteScrollFrame.Size.Y.Offset + 5 + ClearLogsButton.Size.Y.Offset + 5 + SaveSessionButton.Size.Y.Offset + 5 + HookSettingsFrame.Size.Y.Offset + 10
-        local fullHeight = Header.AbsoluteSize.Y + totalBottomUIHeight
-        mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset, 0, fullHeight)
-        RemoteScrollFrame.Size = UDim2.new(1,0,0, mainFrame.Size.Y.Offset - (Header.AbsoluteSize.Y + FilterTextBox.Size.Y.Offset + 5 + ClearLogsButton.Size.Y.Offset + 5 + SaveSessionButton.Size.Y.Offset + 5 + HookSettingsFrame.Size.Y.Offset + 10))
-
-        MinimizeButton.Text = "_"
-        if isInfoFrameOpen then -- Jika info frame tadinya terbuka, tampilkan kembali
+        if IsValid(Header) and IsValid(FilterTextBox) and IsValid(RemoteScrollFrame) and IsValid(ClearLogsButton) and IsValid(SaveSessionButton) and IsValid(HookSettingsFrame) and IsValid(mainFrame) then
+            local totalBottomUIHeight = FilterTextBox.Size.Y.Offset + 5 + RemoteScrollFrame.Size.Y.Offset + 5 + ClearLogsButton.Size.Y.Offset + 5 + SaveSessionButton.Size.Y.Offset + 5 + HookSettingsFrame.Size.Y.Offset + 10
+            local fullHeight = Header.AbsoluteSize.Y + totalBottomUIHeight
+            mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset, 0, fullHeight)
+            RemoteScrollFrame.Size = UDim2.new(1,0,0, mainFrame.Size.Y.Offset - (Header.AbsoluteSize.Y + FilterTextBox.Size.Y.Offset + 5 + ClearLogsButton.Size.Y.Offset + 5 + SaveSessionButton.Size.Y.Offset + 5 + HookSettingsFrame.Size.Y.Offset + 10))
+        end
+        if IsValid(MinimizeButton) then MinimizeButton.Text = "_" end
+        if isInfoFrameOpen and IsValid(InfoFrame) then 
             InfoFrame.Visible = true
         end
     end
 end)
 
 OpenInfoFrameButton.MouseButton1Click:Connect(function()
-    if isMainFrameMinimized then return end -- Jangan lakukan apa-apa jika diminimize
+    if isMainFrameMinimized then return end 
 
     isInfoFrameOpen = not isInfoFrameOpen
-    InfoFrame.Visible = isInfoFrameOpen
+    if IsValid(InfoFrame) then InfoFrame.Visible = isInfoFrameOpen end
+
     if isInfoFrameOpen then
-        OpenInfoFrameButton.Text = "<"
-        mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset + InfoFrame.Size.X.Offset + 5, 0, mainFrame.Size.Y.Offset)
-        InfoFrame.ZIndex = 1000 -- Bawa ke depan
-        -- Jika tidak ada remote yang dipilih, tampilkan pesan default atau kosongkan
-        if not currentRemoteLookingAt then
+        if IsValid(OpenInfoFrameButton) then OpenInfoFrameButton.Text = "<" end
+        if IsValid(mainFrame) and IsValid(InfoFrame) then
+             mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset + InfoFrame.Size.X.Offset + 5, 0, mainFrame.Size.Y.Offset)
+             InfoFrame.ZIndex = 1000 
+        end
+        if not currentRemoteLookingAt and IsValid(InfoHeaderText) and IsValid(CodeTextLabel) and IsValid(ArgumentEditorTextBox) then
             InfoHeaderText.Text = "Info: Tidak ada remote dipilih"
             CodeTextLabel.Text = "-- Pilih remote dari daftar untuk melihat detail --"
             ArgumentEditorTextBox.Text = "{}"
         end
     else
-        OpenInfoFrameButton.Text = ">"
-        mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset - InfoFrame.Size.X.Offset - 5, 0, mainFrame.Size.Y.Offset)
-        InfoFrame.ZIndex = 999
+        if IsValid(OpenInfoFrameButton) then OpenInfoFrameButton.Text = ">" end
+        if IsValid(mainFrame) and IsValid(InfoFrame) then
+            mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset - InfoFrame.Size.X.Offset - 5, 0, mainFrame.Size.Y.Offset)
+            InfoFrame.ZIndex = 999
+        end
     end
 end)
 
 CloseInfoFrameButton.MouseButton1Click:Connect(function()
     if isInfoFrameOpen then
         isInfoFrameOpen = false
-        InfoFrame.Visible = false
-        OpenInfoFrameButton.Text = ">"
-        mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset - InfoFrame.Size.X.Offset - 5, 0, mainFrame.Size.Y.Offset)
-        InfoFrame.ZIndex = 999
+        if IsValid(InfoFrame) then InfoFrame.Visible = false end
+        if IsValid(OpenInfoFrameButton) then OpenInfoFrameButton.Text = ">" end
+        if IsValid(mainFrame) and IsValid(InfoFrame) then
+            mainFrame.Size = UDim2.new(0, mainFrame.Size.X.Offset - InfoFrame.Size.X.Offset - 5, 0, mainFrame.Size.Y.Offset)
+            InfoFrame.ZIndex = 999
+        end
         currentRemoteLookingAt = nil
         currentRemoteDataKey = nil
     end
 end)
 
 CopyCodeButton.MouseButton1Click:Connect(function()
-    if currentRemoteLookingAt and CodeTextLabel.Text ~= "" then
+    if currentRemoteLookingAt and IsValid(CodeTextLabel) and CodeTextLabel.Text ~= "" and IsValid(CodeCommentTextLabel) then
         local success, err = pcall(setclipboard, CodeCommentTextLabel.Text .. "\n\n" .. CodeTextLabel.Text)
         ButtonEffect(CopyCodeButton, success and "Kode Disalin!" or "Gagal Menyalin", success)
     else
@@ -1130,7 +1169,6 @@ CopyCodeButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Fungsi untuk menjalankan remote dengan argumen tertentu
 local function ExecuteRemote(remote, argsToExecute)
     if not remote or not IsValid(remote) then
         warn("TurtleSpy: Remote tidak valid untuk dieksekusi.")
@@ -1140,19 +1178,20 @@ local function ExecuteRemote(remote, argsToExecute)
     local result = {}
     local successCall = false
     local callError = "Unknown error"
+    local args = argsToExecute or {} -- Pastikan args tidak nil
 
     if remote:IsA("RemoteFunction") then
-        successCall, result = pcall(remote.InvokeServer, remote, unpack(argsToExecute))
-        if not successCall then callError = result end -- result berisi pesan error
+        successCall, result = pcall(remote.InvokeServer, remote, unpack(args))
+        if not successCall then callError = tostring(result) end 
     elseif remote:IsA("RemoteEvent") then
-        successCall, result = pcall(remote.FireServer, remote, unpack(argsToExecute))
-        if not successCall then callError = result end
+        successCall, result = pcall(remote.FireServer, remote, unpack(args))
+        if not successCall then callError = tostring(result) end
     else
         return nil, "Tipe remote tidak didukung"
     end
 
     if successCall then
-        return result, nil -- result bisa jadi tabel hasil dari InvokeServer atau nil dari FireServer
+        return result, nil 
     else
         return nil, callError
     end
@@ -1161,7 +1200,7 @@ end
 RunCodeButton.MouseButton1Click:Connect(function()
     if currentRemoteLookingAt and currentRemoteDataKey and remoteData[currentRemoteDataKey] then
         local data = remoteData[currentRemoteDataKey]
-        local originalArgs = data.argsHistory[#data.argsHistory] -- Ambil argumen terbaru/asli
+        local originalArgs = data.argsHistory[#data.argsHistory] 
         
         local _, err = ExecuteRemote(currentRemoteLookingAt, originalArgs)
         
@@ -1177,26 +1216,23 @@ RunCodeButton.MouseButton1Click:Connect(function()
 end)
 
 ApplyArgumentsButton.MouseButton1Click:Connect(function()
-    if currentRemoteLookingAt then
+    if currentRemoteLookingAt and IsValid(ArgumentEditorTextBox) then
         local argsStr = ArgumentEditorTextBox.Text
         local parsedArgs, parseErr = parseArgumentsString(argsStr)
 
         if parseErr then
             ButtonEffect(ApplyArgumentsButton, "Error Argumen!", false)
             warn("TurtleSpy: Gagal mem-parse argumen yang diedit:", parseErr)
-            -- Mungkin tampilkan error di UI kecil dekat situ
             return
         end
         
-        local _, execErr = ExecuteRemote(currentRemoteLookingAt, parsedArgs or {})
+        local _, execErr = ExecuteRemote(currentRemoteLookingAt, parsedArgs) -- parsedArgs bisa jadi nil jika error parsing, ExecuteRemote akan handle
         
         if execErr then
             ButtonEffect(ApplyArgumentsButton, "Gagal Eksekusi!", false)
             warn("TurtleSpy: Gagal menjalankan dengan argumen yang diedit:", execErr)
         else
             ButtonEffect(ApplyArgumentsButton, "Dijalankan dg Arg Editan!", true)
-            -- Log bahwa ini dijalankan dengan argumen yang diedit
-            -- Mungkin tambahkan ke history argumen remoteData jika diinginkan
         end
     else
         ButtonEffect(ApplyArgumentsButton, "Pilih Remote Dulu", false)
@@ -1227,7 +1263,7 @@ CopyDecompiledButton.MouseButton1Click:Connect(function()
     if currentRemoteLookingAt and currentRemoteDataKey and remoteData[currentRemoteDataKey] then
         local data = remoteData[currentRemoteDataKey]
         if data.callingScript and IsValid(data.callingScript) then
-            CopyDecompiledButton.Text = "Mendekompilasi..."
+            if IsValid(CopyDecompiledButton) then CopyDecompiledButton.Text = "Mendekompilasi..." end
             local success, result = pcall(decompileFunc, data.callingScript)
             if success then
                 local cbSuccess, _ = pcall(setclipboard, result)
@@ -1236,7 +1272,6 @@ CopyDecompiledButton.MouseButton1Click:Connect(function()
                 ButtonEffect(CopyDecompiledButton, "Gagal Dekompilasi", false)
                 warn("TurtleSpy: Decompilation error:", result)
             end
-            -- Kembalikan teks tombol setelah efek
             delay(1.5, function() if IsValid(CopyDecompiledButton) then CopyDecompiledButton.Text = "Salin Script Decompiled" end end)
         else
             ButtonEffect(CopyDecompiledButton, "Script Tidak Ditemukan", false)
@@ -1262,19 +1297,23 @@ IgnoreRemoteButton.MouseButton1Click:Connect(function()
         local index = table.find(IgnoreList, currentRemoteLookingAt)
         if index then
             table.remove(IgnoreList, index)
-            IgnoreRemoteButton.Text = "Abaikan Remote Ini"
-            IgnoreRemoteButton.TextColor3 = colorSettings["MainButtons"]["TextColor"]
+            if IsValid(IgnoreRemoteButton) then
+                IgnoreRemoteButton.Text = "Abaikan Remote Ini"
+                IgnoreRemoteButton.TextColor3 = colorSettings["MainButtons"]["TextColor"]
+            end
             ButtonEffect(IgnoreRemoteButton, "Berhenti Mengabaikan", true)
-            if remoteData[currentRemoteDataKey] and IsValid(remoteData[currentRemoteDataKey].button) then
+            if remoteData[currentRemoteDataKey] and IsValid(remoteData[currentRemoteDataKey].button) and IsValid(remoteData[currentRemoteDataKey].button.RemoteNameLabel) then
                  remoteData[currentRemoteDataKey].button.RemoteNameLabel.TextColor3 = colorSettings["RemoteButtons"]["TextColor"]
             end
         else
             table.insert(IgnoreList, currentRemoteLookingAt)
-            IgnoreRemoteButton.Text = "Berhenti Mengabaikan"
-            IgnoreRemoteButton.TextColor3 = Color3.fromRGB(251, 197, 49)
+            if IsValid(IgnoreRemoteButton) then
+                IgnoreRemoteButton.Text = "Berhenti Mengabaikan"
+                IgnoreRemoteButton.TextColor3 = Color3.fromRGB(251, 197, 49)
+            end
             ButtonEffect(IgnoreRemoteButton, "Remote Diabaikan", true)
-            if remoteData[currentRemoteDataKey] and IsValid(remoteData[currentRemoteDataKey].button) then
-                 remoteData[currentRemoteDataKey].button.RemoteNameLabel.TextColor3 = Color3.fromRGB(127, 143, 166) -- Warna abu-abu
+            if remoteData[currentRemoteDataKey] and IsValid(remoteData[currentRemoteDataKey].button) and IsValid(remoteData[currentRemoteDataKey].button.RemoteNameLabel) then
+                 remoteData[currentRemoteDataKey].button.RemoteNameLabel.TextColor3 = Color3.fromRGB(127, 143, 166) 
             end
         end
     else
@@ -1287,19 +1326,23 @@ BlockRemoteButton.MouseButton1Click:Connect(function()
         local index = table.find(BlockList, currentRemoteLookingAt)
         if index then
             table.remove(BlockList, index)
-            BlockRemoteButton.Text = "Blokir Remote Ini"
-            BlockRemoteButton.TextColor3 = colorSettings["MainButtons"]["TextColor"]
+            if IsValid(BlockRemoteButton) then
+                BlockRemoteButton.Text = "Blokir Remote Ini"
+                BlockRemoteButton.TextColor3 = colorSettings["MainButtons"]["TextColor"]
+            end
             ButtonEffect(BlockRemoteButton, "Blokir Dilepas", true)
-            if remoteData[currentRemoteDataKey] and IsValid(remoteData[currentRemoteDataKey].button) then
+            if remoteData[currentRemoteDataKey] and IsValid(remoteData[currentRemoteDataKey].button) and IsValid(remoteData[currentRemoteDataKey].button.RemoteNameLabel) then
                  remoteData[currentRemoteDataKey].button.RemoteNameLabel.TextColor3 = colorSettings["RemoteButtons"]["TextColor"]
             end
         else
             table.insert(BlockList, currentRemoteLookingAt)
-            BlockRemoteButton.Text = "Buka Blokir Remote"
-            BlockRemoteButton.TextColor3 = Color3.fromRGB(251, 197, 49)
+            if IsValid(BlockRemoteButton) then
+                BlockRemoteButton.Text = "Buka Blokir Remote"
+                BlockRemoteButton.TextColor3 = Color3.fromRGB(251, 197, 49)
+            end
             ButtonEffect(BlockRemoteButton, "Remote Diblokir", true)
-            if remoteData[currentRemoteDataKey] and IsValid(remoteData[currentRemoteDataKey].button) then
-                 remoteData[currentRemoteDataKey].button.RemoteNameLabel.TextColor3 = Color3.fromRGB(225, 177, 44) -- Warna kuning/oranye
+            if remoteData[currentRemoteDataKey] and IsValid(remoteData[currentRemoteDataKey].button) and IsValid(remoteData[currentRemoteDataKey].button.RemoteNameLabel) then
+                 remoteData[currentRemoteDataKey].button.RemoteNameLabel.TextColor3 = Color3.fromRGB(225, 177, 44) 
             end
         end
     else
@@ -1312,13 +1355,17 @@ UnstackRemoteButton.MouseButton1Click:Connect(function()
         local index = table.find(unstackedRemotes, currentRemoteLookingAt)
         if index then
             table.remove(unstackedRemotes, index)
-            UnstackRemoteButton.Text = "Unstack Remote (Argumen Baru)"
-            UnstackRemoteButton.TextColor3 = colorSettings["MainButtons"]["TextColor"]
+            if IsValid(UnstackRemoteButton) then
+                UnstackRemoteButton.Text = "Unstack Remote (Argumen Baru)"
+                UnstackRemoteButton.TextColor3 = colorSettings["MainButtons"]["TextColor"]
+            end
             ButtonEffect(UnstackRemoteButton, "Remote Akan Di-stack", true)
         else
             table.insert(unstackedRemotes, currentRemoteLookingAt)
-            UnstackRemoteButton.Text = "Stack Remote Ini"
-            UnstackRemoteButton.TextColor3 = Color3.fromRGB(251, 197, 49)
+            if IsValid(UnstackRemoteButton) then
+                UnstackRemoteButton.Text = "Stack Remote Ini"
+                UnstackRemoteButton.TextColor3 = Color3.fromRGB(251, 197, 49)
+            end
             ButtonEffect(UnstackRemoteButton, "Remote Akan Di-unstack", true)
         end
     else
@@ -1327,7 +1374,7 @@ UnstackRemoteButton.MouseButton1Click:Connect(function()
 end)
 
 WhileLoopButton.MouseButton1Click:Connect(function()
-    if currentRemoteLookingAt and CodeTextLabel.Text ~= "" then
+    if currentRemoteLookingAt and IsValid(CodeTextLabel) and CodeTextLabel.Text ~= "" then
         local loopScript = string.format("while task.wait() do\n    %s\nend", CodeTextLabel.Text)
         local success, err = pcall(setclipboard, loopScript)
         ButtonEffect(WhileLoopButton, success and "Skrip Loop Disalin!" or "Gagal Menyalin", success)
@@ -1350,7 +1397,7 @@ CopyReturnValueButton.MouseButton1Click:Connect(function()
         end
 
         local success, returnStr = pcall(convertTableToString, result, true)
-        if not success then returnStr = "--[[ Error converting return value ]]--" end
+        if not success then returnStr = "--[[ Error converting return value: " .. tostring(returnStr) .. " ]]--" end
         
         local cbSuccess, _ = pcall(setclipboard, returnStr)
         ButtonEffect(CopyReturnValueButton, cbSuccess and "Return Disalin!" or "Gagal Menyalin Return", cbSuccess)
@@ -1363,25 +1410,26 @@ CopyReturnValueButton.MouseButton1Click:Connect(function()
 end)
 
 ClearLogsButton.MouseButton1Click:Connect(function()
-    for _, child in ipairs(RemoteScrollFrame:GetChildren()) do
-        if child:IsA("TextButton") and child.Name ~= "RemoteButtonTemplate" then -- Jangan hapus template
-            child:Destroy()
+    if IsValid(RemoteScrollFrame) then
+        for _, child in ipairs(RemoteScrollFrame:GetChildren()) do
+            if child:IsA("TextButton") and child.Name ~= "RemoteButtonTemplate" then 
+                child:Destroy()
+            end
         end
     end
     for _, conn in ipairs(activeConnections) do
         if conn and conn.Connected then conn:Disconnect() end
     end
     activeConnections = {}
-    remotes = {}
+    -- remotes = {} -- Tidak digunakan
     remoteData = {}
-    remoteButtons = {} -- Ini sekarang merujuk ke remoteData[key].button
-    -- Jangan reset IgnoreList, BlockList, unstackedRemotes kecuali diminta
+    -- remoteButtons = {} -- Tidak digunakan
     
-    buttonOffset = 5 -- Reset offset, mulai dari atas
-    RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollSizeOffset) -- Reset ukuran canvas
+    buttonOffset = 5 
+    if IsValid(RemoteScrollFrame) then RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollSizeOffset) end
     currentRemoteLookingAt = nil
     currentRemoteDataKey = nil
-    if isInfoFrameOpen then -- Tutup info frame jika terbuka
+    if isInfoFrameOpen and IsValid(CloseInfoFrameButton) then 
         CloseInfoFrameButton:MouseButton1Click()
     end
     ButtonEffect(ClearLogsButton, "Log Dibersihkan!", true)
@@ -1390,35 +1438,33 @@ end)
 UnstackAllButton.MouseButton1Click:Connect(function()
     local currentUnstackedCount = #unstackedRemotes
     local allKnownRemotes = {}
-    for key, dataItem in pairs(remoteData) do
+    for _, dataItem in pairs(remoteData) do -- Iterasi remoteData
         if dataItem.instance and IsValid(dataItem.instance) then
             table.insert(allKnownRemotes, dataItem.instance)
         end
     end
 
-    if currentUnstackedCount > 0 and currentUnstackedCount == #allKnownRemotes then -- Jika semua sudah di-unstack, stack semua
+    if currentUnstackedCount > 0 and currentUnstackedCount == #allKnownRemotes then 
         unstackedRemotes = {}
-        UnstackAllButton.Text = "Unstack Semua"
+        if IsValid(UnstackAllButton) then UnstackAllButton.Text = "Unstack Semua" end
         ButtonEffect(UnstackAllButton, "Semua Di-stack Ulang", true)
-    else -- Unstack semua yang belum
-        unstackedRemotes = {} -- Kosongkan dulu
+    else 
+        unstackedRemotes = {} 
         for _, remoteInst in ipairs(allKnownRemotes) do
             if not table.find(unstackedRemotes, remoteInst) then
                  table.insert(unstackedRemotes, remoteInst)
             end
         end
-        UnstackAllButton.Text = "Stack Semua"
+        if IsValid(UnstackAllButton) then UnstackAllButton.Text = "Stack Semua" end
         ButtonEffect(UnstackAllButton, "Semua Di-unstack", true)
     end
-    -- Update tampilan tombol unstack individual jika info frame terbuka
-    if currentRemoteLookingAt and isInfoFrameOpen then
+    if currentRemoteLookingAt and isInfoFrameOpen and IsValid(UnstackRemoteButton) then
         UnstackRemoteButton.Text = table.find(unstackedRemotes, currentRemoteLookingAt) and "Stack Remote Ini" or "Unstack Remote (Argumen Baru)"
         UnstackRemoteButton.TextColor3 = table.find(unstackedRemotes, currentRemoteLookingAt) and Color3.fromRGB(251, 197, 49) or colorSettings["MainButtons"]["TextColor"]
     end
 end)
 
 
--- Fungsi untuk menyimpan sesi
 SaveSessionButton.MouseButton1Click:Connect(function()
     local sessionData = {
         remotes = {},
@@ -1426,17 +1472,15 @@ SaveSessionButton.MouseButton1Click:Connect(function()
         blockList = {},
         unstackedRemotes = {}
     }
-    for key, dataItem in pairs(remoteData) do
+    for _, dataItem in pairs(remoteData) do
         if dataItem.instance and IsValid(dataItem.instance) then
             local remoteInfo = {
                 path = GetFullPathOfAnInstance(dataItem.instance),
                 name = dataItem.instance.Name,
                 className = dataItem.instance.ClassName,
-                argsHistory = {}, -- Hanya simpan argumen terakhir untuk kesederhanaan, atau semua jika perlu
+                argsHistory = {}, 
                 count = dataItem.count,
-                -- Tidak menyimpan callingScript karena mungkin tidak valid saat dimuat ulang
             }
-            -- Hanya simpan argumen terakhir sebagai string
             if #dataItem.argsHistory > 0 then
                  local success, argStr = pcall(convertTableToString, dataItem.argsHistory[#dataItem.argsHistory], false)
                  if success then remoteInfo.lastArgsString = argStr else remoteInfo.lastArgsString = "{}" end
@@ -1450,7 +1494,7 @@ SaveSessionButton.MouseButton1Click:Connect(function()
 
     local success, encodedData = pcall(HttpService.JSONEncode, HttpService, sessionData)
     if success then
-        local writeSuccess, err = pcall(writefile, "TurtleSpySession.json", encodedData)
+        local writeSuccess, err = pcall(writefileFunc, "TurtleSpySession.json", encodedData)
         ButtonEffect(SaveSessionButton, writeSuccess and "Sesi Disimpan!" or "Gagal Menyimpan", writeSuccess)
         if not writeSuccess then warn("TurtleSpy: Gagal menulis file sesi:", err) end
     else
@@ -1459,9 +1503,8 @@ SaveSessionButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Fungsi untuk memuat sesi
 LoadSessionButton.MouseButton1Click:Connect(function()
-    local success, jsonData = pcall(readfile, "TurtleSpySession.json")
+    local success, jsonData = pcall(readfileFunc, "TurtleSpySession.json")
     if not success or not jsonData then
         ButtonEffect(LoadSessionButton, "File Sesi Tidak Ada", false)
         warn("TurtleSpy: Gagal membaca file sesi:", jsonData)
@@ -1475,27 +1518,41 @@ LoadSessionButton.MouseButton1Click:Connect(function()
         return
     end
 
-    ClearLogsButton:MouseButton1Click() -- Bersihkan log saat ini
+    if IsValid(ClearLogsButton) then ClearLogsButton:MouseButton1Click() end
 
-    local function findInstanceByPath(path)
-        local success, instance = pcall(function()
-            local current = game
-            for part in string.gmatch(path, "[^%.%/:]+") do -- Split by ., /, : (GetService)
-                if part:match('GetService%("(.+)"%)') then
-                    local serviceName = part:match('GetService%("(.+)"%)')
-                    current = current:GetService(serviceName)
-                elseif part:match('%["(.+)"%]') then
-                    local rawName = part:match('%["(.+)"%]')
-                    current = current[rawName] -- Akses langsung jika dalam kurung siku
-                else
-                    current = current[part]
-                end
-                if not current then return nil end
+    local function findInstanceByPath(pathString)
+        if type(pathString) ~= "string" then return nil end
+        local parts = {}
+        for part in pathString:gmatch("([^%.%[%]:]+)") do -- Lebih toleran terhadap pemisah
+            table.insert(parts, part:gsub('^%s*"?(.-)"?%s*$', "%1")) -- Hilangkan kutip dan spasi
+        end
+        
+        local currentInstance = game
+        for i, partName in ipairs(parts) do
+            if currentInstance == nil then return nil end
+            if i == 1 and partName:lower() == "game" then goto continue_loop end -- Abaikan "game" di awal
+
+            local foundChild = nil
+            if currentInstance:FindFirstChild(partName, true) then -- Cari rekursif dulu
+                foundChild = currentInstance:FindFirstChild(partName, true)
+            elseif currentInstance:FindFirstChild(partName) then -- Cari non-rekursif
+                 foundChild = currentInstance:FindFirstChild(partName)
+            else -- Coba GetService jika tidak ditemukan sebagai child biasa
+                local sucGetService, service = pcall(currentInstance.GetService, currentInstance, partName)
+                if sucGetService and service then foundChild = service end
             end
-            return current
-        end)
-        return success and instance or nil
+            
+            if foundChild then
+                currentInstance = foundChild
+            else
+                -- warn("findInstanceByPath: Could not find part '" .. partName .. "' in " .. (currentInstance and currentInstance:GetFullName() or "nil"))
+                return nil
+            end
+            ::continue_loop::
+        end
+        return currentInstance
     end
+
 
     for _, remoteInfo in ipairs(sessionData.remotes or {}) do
         local instance = findInstanceByPath(remoteInfo.path)
@@ -1505,22 +1562,22 @@ LoadSessionButton.MouseButton1Click:Connect(function()
                 local parsed, _ = parseArgumentsString(remoteInfo.lastArgsString)
                 args = parsed or {}
             end
-            -- Panggil addToListInternal untuk menambahkan remote yang dimuat
-            -- Perlu script dummy karena getCallingScript tidak akan berfungsi
             local dummyScript = Instance.new("LocalScript")
             dummyScript.Name = "LoadedFromSession"
             addToListInternal(instance:IsA("RemoteEvent"), instance, dummyScript, unpack(args))
             dummyScript:Destroy()
             
-            -- Update count jika ada
-            local dataKey =GetKeyForRemote(instance, args, table.find(unstackedRemotes, instance) ~= nil)
+            local dataKey = GetKeyForRemote(instance, args, table.find(unstackedRemotes, instance) ~= nil)
             if remoteData[dataKey] and remoteInfo.count and remoteInfo.count > 1 then
                 remoteData[dataKey].count = remoteInfo.count
-                if IsValid(remoteData[dataKey].button) then
+                if IsValid(remoteData[dataKey].button) and IsValid(remoteData[dataKey].button.NumberLabel) then
                     remoteData[dataKey].button.NumberLabel.Text = tostring(remoteInfo.count)
-                    -- Update posisi nama remote berdasarkan panjang angka
-                    local numSize = TextService:GetTextSize(remoteData[dataKey].button.NumberLabel.Text, remoteData[dataKey].button.NumberLabel.TextSize, remoteData[dataKey].button.NumberLabel.Font, Vector2.new())
-                    remoteData[dataKey].button.RemoteNameLabel.Position = UDim2.new(0, numSize.X + 10, 0, 0)
+                    if TextService and IsValid(TextService) then
+                        local numSize = TextService:GetTextSize(remoteData[dataKey].button.NumberLabel.Text, remoteData[dataKey].button.NumberLabel.TextSize, remoteData[dataKey].button.NumberLabel.Font, Vector2.new())
+                        if IsValid(remoteData[dataKey].button.RemoteNameLabel) then
+                             remoteData[dataKey].button.RemoteNameLabel.Position = UDim2.new(0, numSize.X + 10, 0, 0)
+                        end
+                    end
                 end
             end
         else
@@ -1529,24 +1586,24 @@ LoadSessionButton.MouseButton1Click:Connect(function()
     end
 
     IgnoreList = {}
-    for _, path in ipairs(sessionData.ignoreList or {}) do local inst = findInstanceByPath(path) if inst then table.insert(IgnoreList, inst) end end
+    for _, path in ipairs(sessionData.ignoreList or {}) do local inst = findInstanceByPath(path) if inst and IsValid(inst) then table.insert(IgnoreList, inst) end end
     BlockList = {}
-    for _, path in ipairs(sessionData.blockList or {}) do local inst = findInstanceByPath(path) if inst then table.insert(BlockList, inst) end end
+    for _, path in ipairs(sessionData.blockList or {}) do local inst = findInstanceByPath(path) if inst and IsValid(inst) then table.insert(BlockList, inst) end end
     unstackedRemotes = {}
-    for _, path in ipairs(sessionData.unstackedRemotes or {}) do local inst = findInstanceByPath(path) if inst then table.insert(unstackedRemotes, inst) end end
+    for _, path in ipairs(sessionData.unstackedRemotes or {}) do local inst = findInstanceByPath(path) if inst and IsValid(inst) then table.insert(unstackedRemotes, inst) end end
     
     ButtonEffect(LoadSessionButton, "Sesi Dimuat!", true)
-    FilterTextBox.Text = "" -- Reset filter
-    FilterRemotes("") -- Terapkan filter kosong untuk menampilkan semua
+    if IsValid(FilterTextBox) then FilterTextBox.Text = "" end 
+    FilterRemotes("") 
 end)
 
 
--- Pengaturan Hook
 local fireServerHookActive = true
 local invokeServerHookActive = true
 local namecallHookActive = true
 
 local function updateHookButton(button, textPrefix, isActive)
+    if not IsValid(button) then return end
     button._isActive = isActive
     button.Text = textPrefix .. (isActive and " (Aktif)" or " (Nonaktif)")
     button.BackgroundColor3 = isActive and Color3.fromRGB(76, 209, 55) or colorSettings["MainButtons"]["BackgroundColor"]
@@ -1568,14 +1625,13 @@ ToggleNamecallHookButton.MouseButton1Click:Connect(function()
     ButtonEffect(ToggleNamecallHookButton, namecallHookActive and "Hook Namecall Aktif" or "Hook Namecall Nonaktif", namecallHookActive)
 end)
 
--- Fungsi Filter
 local function FilterRemotes(filterText)
+    if not IsValid(RemoteScrollFrame) then return end
     filterText = filterText:lower()
-    local newButtonOffset = 5 -- Mulai dari atas lagi
+    local newButtonOffset = 5 
     local visibleCount = 0
     
-    -- Iterasi melalui remoteData karena itu yang menyimpan info lengkap
-    for key, dataItem in pairs(remoteData) do
+    for _, dataItem in pairs(remoteData) do
         if dataItem.button and IsValid(dataItem.button) then
             local remoteName = dataItem.instance and dataItem.instance.Name:lower() or ""
             if filterText == "" or remoteName:find(filterText, 1, true) then
@@ -1591,100 +1647,98 @@ local function FilterRemotes(filterText)
     RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, math.max(scrollSizeOffset, newButtonOffset))
 end
 
-FilterTextBox.FocusLost:Connect(function(enterPressed)
-    if enterPressed then
-        FilterRemotes(FilterTextBox.Text)
-    end
-end)
-FilterTextBox:GetPropertyChangedSignal("Text"):Connect(function()
-    FilterRemotes(FilterTextBox.Text) -- Filter secara real-time
-end)
+if IsValid(FilterTextBox) then
+    FilterTextBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            FilterRemotes(FilterTextBox.Text)
+        end
+    end)
+    FilterTextBox:GetPropertyChangedSignal("Text"):Connect(function()
+        FilterRemotes(FilterTextBox.Text) 
+    end)
+end
 
--- Keybind Handler
-UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
-    if gameProcessedEvent then return end -- Jangan proses jika game sudah memprosesnya (mis. chat)
-    if input.KeyCode == Enum.KeyCode[settings["Keybind"]:upper()] then
-        TurtleSpyGUI.Enabled = not TurtleSpyGUI.Enabled
-    end
-end)
+if UserInputService then
+    UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+        if gameProcessedEvent then return end 
+        if input.KeyCode == Enum.KeyCode[settings["Keybind"]:upper()] then
+            if IsValid(TurtleSpyGUI) then TurtleSpyGUI.Enabled = not TurtleSpyGUI.Enabled end
+        end
+    end)
+end
 
 
--- Browser Remote Logic
-local browsedRemotesCache = {} -- Cache untuk remote yang sudah di-browse
+local browsedRemotesCache = {} 
 local browsedConnections = {}
 local browserButtonOffsetY = 10
 local browserCanvasCurrentSizeY = 286
 
-OpenBrowserButton.MouseButton1Click:Connect(function()
-    BrowserHeader.Visible = not BrowserHeader.Visible
-    if BrowserHeader.Visible then
-        -- Bersihkan item lama sebelum mengisi ulang
-        for _, child in ipairs(RemoteBrowserFrame:GetChildren()) do
-            if child:IsA("TextButton") and child.Name ~= "RemoteButtonBrowserTemplate" then
-                child:Destroy()
+if IsValid(OpenBrowserButton) then
+    OpenBrowserButton.MouseButton1Click:Connect(function()
+        if not IsValid(BrowserHeader) or not IsValid(RemoteBrowserFrame) then return end
+        BrowserHeader.Visible = not BrowserHeader.Visible
+        if BrowserHeader.Visible then
+            for _, child in ipairs(RemoteBrowserFrame:GetChildren()) do
+                if child:IsA("TextButton") and child.Name ~= "RemoteButtonBrowserTemplate" then
+                    child:Destroy()
+                end
             end
-        end
-        for _, conn in ipairs(browsedConnections) do if conn.Connected then conn:Disconnect() end end
-        browsedConnections = {}
-        browsedRemotesCache = {} -- Reset cache
-        browserButtonOffsetY = 10
-        browserCanvasCurrentSizeY = 286
-        RemoteBrowserFrame.CanvasSize = UDim2.new(0,0,0, browserCanvasCurrentSizeY)
+            for _, conn in ipairs(browsedConnections) do if conn.Connected then conn:Disconnect() end end
+            browsedConnections = {}
+            browsedRemotesCache = {} 
+            browserButtonOffsetY = 10
+            browserCanvasCurrentSizeY = 286
+            RemoteBrowserFrame.CanvasSize = UDim2.new(0,0,0, browserCanvasCurrentSizeY)
 
-        -- Cari semua remote di game
-        for _, v in ipairs(game:GetDescendants()) do
-            if (v:IsA("RemoteEvent") or v:IsA("RemoteFunction")) and not table.find(browsedRemotesCache, v) then
-                table.insert(browsedRemotesCache, v)
-                local bButton = RemoteButtonBrowserTemplate:Clone()
-                bButton.Parent = RemoteBrowserFrame
-                bButton.Visible = true
-                bButton.Position = UDim2.new(0.05, 0, 0, browserButtonOffsetY)
-                
-                local nameLabel = bButton:FindFirstChild("RemoteNameBrowserLabel") or RemoteNameBrowserTemplate:Clone()
-                nameLabel.Parent = bButton
-                nameLabel.Text = v.Name
-                
-                local iconLabel = bButton:FindFirstChild("RemoteIconBrowser") or RemoteIconBrowserTemplate:Clone()
-                iconLabel.Parent = bButton
-                iconLabel.Image = v:IsA("RemoteEvent") and eventImage or functionImage
+            for _, v in ipairs(game:GetDescendants()) do
+                if (v:IsA("RemoteEvent") or v:IsA("RemoteFunction")) and not table.find(browsedRemotesCache, v) then
+                    table.insert(browsedRemotesCache, v)
+                    local bButton = RemoteButtonBrowserTemplate:Clone()
+                    bButton.Parent = RemoteBrowserFrame
+                    bButton.Visible = true
+                    bButton.Position = UDim2.new(0.05, 0, 0, browserButtonOffsetY)
+                    
+                    local nameLabel = bButton:FindFirstChild("RemoteNameBrowserLabel") or RemoteNameBrowserTemplate:Clone()
+                    nameLabel.Parent = bButton
+                    nameLabel.Text = v.Name
+                    
+                    local iconLabel = bButton:FindFirstChild("RemoteIconBrowser") or RemoteIconBrowserTemplate:Clone()
+                    iconLabel.Parent = bButton
+                    iconLabel.Image = v:IsA("RemoteEvent") and eventImage or functionImage
 
-                local fireMethod = v:IsA("RemoteEvent") and ":FireServer()" or ":InvokeServer()"
-                
-                local conn = bButton.MouseButton1Click:Connect(function()
-                    local success, err = pcall(setclipboard, GetFullPathOfAnInstance(v) .. fireMethod)
-                    ButtonEffect(bButton, success and "Path Disalin!" or "Gagal", success)
-                end)
-                table.insert(browsedConnections, conn)
-                
-                browserButtonOffsetY = browserButtonOffsetY + bButton.AbsoluteSize.Y + 5
-                if browserButtonOffsetY > browserCanvasCurrentSizeY - 30 then -- -30 untuk buffer
-                    browserCanvasCurrentSizeY = browserCanvasCurrentSizeY + bButton.AbsoluteSize.Y + 5
-                    RemoteBrowserFrame.CanvasSize = UDim2.new(0, 0, 0, browserCanvasCurrentSizeY)
+                    local fireMethod = v:IsA("RemoteEvent") and ":FireServer()" or ":InvokeServer()"
+                    
+                    local conn = bButton.MouseButton1Click:Connect(function()
+                        local successCopy, errCopy = pcall(setclipboard, GetFullPathOfAnInstance(v) .. fireMethod)
+                        ButtonEffect(bButton, successCopy and "Path Disalin!" or "Gagal", successCopy)
+                    end)
+                    table.insert(browsedConnections, conn)
+                    
+                    browserButtonOffsetY = browserButtonOffsetY + bButton.AbsoluteSize.Y + 5
+                    if browserButtonOffsetY > browserCanvasCurrentSizeY - 30 then 
+                        browserCanvasCurrentSizeY = browserCanvasCurrentSizeY + bButton.AbsoluteSize.Y + 5
+                        RemoteBrowserFrame.CanvasSize = UDim2.new(0, 0, 0, browserCanvasCurrentSizeY)
+                    end
                 end
             end
         end
-    end
-end)
+    end)
+end
 
-CloseBrowserButton.MouseButton1Click:Connect(function()
-    BrowserHeader.Visible = false
-end)
+if IsValid(CloseBrowserButton) then
+    CloseBrowserButton.MouseButton1Click:Connect(function()
+        if IsValid(BrowserHeader) then BrowserHeader.Visible = false end
+    end)
+end
 
 
--- Fungsi Inti: addToList dan Hook
 local function GetKeyForRemote(remote, args, isUnstacked)
     local key = GetFullPathOfAnInstance(remote) 
     if not isUnstacked then
-        -- Untuk remote yang di-stack, argumen juga bagian dari kunci
-        -- Ini bisa menjadi kompleks jika argumen adalah tabel besar atau instance
-        -- Untuk kesederhanaan, kita bisa serialize argumen atau menggunakan referensi tabel jika memungkinkan
-        -- Namun, serializing bisa mahal. Coba gunakan kombinasi path dan hash argumen sederhana.
         local success, argStr = pcall(HttpService.JSONEncode, HttpService, args)
         if success then
-            key = key .. "|" .. argStr -- Hati-hati dengan panjang kunci dan performa
+            key = key .. "|" .. argStr 
         else
-            -- Fallback jika JSONEncode gagal (misalnya, ada userdata)
-            -- Gunakan tostring sederhana, mungkin tidak unik untuk tabel kompleks
             local simpleArgStr = ""
             for _, argVal in ipairs(args) do simpleArgStr = simpleArgStr .. tostring(argVal) end
             key = key .. "|SIMPLE|" .. simpleArgStr
@@ -1695,18 +1749,17 @@ end
 
 local function addToListInternal(isEvent, remote, callingScript, ...)
     if not remote or not IsValid(remote) then return end
-    if table.find(IgnoreList, remote) then return end -- Jangan proses jika diabaikan
+    if table.find(IgnoreList, remote) then return end 
 
     local currentId = getThreadContextFunc()
-    setThreadContextFunc(7) -- Set ke context yang aman
+    setThreadContextFunc(7) 
 
     local args = {...}
-    local isUnstacked = table.find(unstackedRemotes, remote) ~= nil
-    local dataKey = GetKeyForRemote(remote, args, isUnstacked)
+    local isUnstackedCurrent = table.find(unstackedRemotes, remote) ~= nil
+    local dataKey = GetKeyForRemote(remote, args, isUnstackedCurrent)
 
     if not remoteData[dataKey] then
-        if #RemoteScrollFrame:GetChildren() > settings.MaxDisplayedRemotes then
-            -- Hapus remote tertua jika melebihi batas
+        if IsValid(RemoteScrollFrame) and #RemoteScrollFrame:GetChildren() > settings.MaxDisplayedRemotes then
             local oldestKey, oldestTimestamp = nil, math.huge
             for k, dataItem in pairs(remoteData) do
                 if dataItem.firstSeen < oldestTimestamp then
@@ -1723,7 +1776,7 @@ local function addToListInternal(isEvent, remote, callingScript, ...)
         local rButton = RemoteButtonTemplate:Clone()
         rButton.Name = remote.Name .. "_Button"
         rButton.Parent = RemoteScrollFrame
-        rButton.Visible = true -- Akan diatur oleh filter nanti
+        rButton.Visible = true 
         
         local numberLabel = rButton:FindFirstChild("NumberLabel") or NumberLabelTemplate:Clone()
         numberLabel.Parent = rButton
@@ -1734,7 +1787,7 @@ local function addToListInternal(isEvent, remote, callingScript, ...)
         remoteNameLabel.Text = remote.Name
         if table.find(BlockList, remote) then
             remoteNameLabel.TextColor3 = Color3.fromRGB(225, 177, 44)
-        elseif table.find(IgnoreList, remote) then -- Sebenarnya tidak akan sampai sini jika diabaikan, tapi untuk konsistensi
+        elseif table.find(IgnoreList, remote) then 
              remoteNameLabel.TextColor3 = Color3.fromRGB(127, 143, 166)
         end
 
@@ -1742,10 +1795,9 @@ local function addToListInternal(isEvent, remote, callingScript, ...)
         remoteIcon.Parent = rButton
         remoteIcon.Image = isEvent and eventImage or functionImage
 
-        -- Simpan data remote
         remoteData[dataKey] = {
             instance = remote,
-            argsHistory = {args}, -- Simpan history argumen
+            argsHistory = {args}, 
             callingScript = callingScript,
             count = 1,
             button = rButton,
@@ -1753,39 +1805,38 @@ local function addToListInternal(isEvent, remote, callingScript, ...)
             firstSeen = tick()
         }
         
-        -- Update posisi nama remote berdasarkan panjang angka
-        local numSize = TextService:GetTextSize(numberLabel.Text, numberLabel.TextSize, numberLabel.Font, Vector2.new())
-        remoteNameLabel.Position = UDim2.new(0, numSize.X + 10, 0, 0)
-        remoteNameLabel.Size = UDim2.new(1, -(numSize.X + 10 + 30), 1, 0) -- -30 untuk ikon
+        if TextService and IsValid(TextService) then
+            local numSize = TextService:GetTextSize(numberLabel.Text, numberLabel.TextSize, numberLabel.Font, Vector2.new())
+            remoteNameLabel.Position = UDim2.new(0, numSize.X + 10, 0, 0)
+            remoteNameLabel.Size = UDim2.new(1, -(numSize.X + 10 + 30), 1, 0) 
+        end
 
-        -- Tambahkan koneksi klik
         local conn = rButton.MouseButton1Click:Connect(function()
             UpdateInfoFrame(remote, dataKey)
         end)
         table.insert(activeConnections, conn)
         
-        -- Panggil filter untuk mengatur posisi dan visibilitas
-        FilterRemotes(FilterTextBox.Text) 
-        if settings.AutoScroll and RemoteScrollFrame.Visible then
+        FilterRemotes(IsValid(FilterTextBox) and FilterTextBox.Text or "") 
+        if settings.AutoScroll and IsValid(RemoteScrollFrame) and RemoteScrollFrame.Visible then
              RemoteScrollFrame.CanvasPosition = Vector2.new(0, RemoteScrollFrame.CanvasSize.Y.Offset)
         end
 
-    else -- Remote sudah ada (baik di-stack atau unstack dengan argumen sama)
+    else 
         local data = remoteData[dataKey]
         data.count = data.count + 1
-        if IsValid(data.button) then
+        if IsValid(data.button) and IsValid(data.button.NumberLabel) then
             data.button.NumberLabel.Text = tostring(data.count)
-            local numSize = TextService:GetTextSize(data.button.NumberLabel.Text, data.button.NumberLabel.TextSize, data.button.NumberLabel.Font, Vector2.new())
-            data.button.RemoteNameLabel.Position = UDim2.new(0, numSize.X + 10, 0, 0)
-            data.button.RemoteNameLabel.Size = UDim2.new(1, -(numSize.X + 10 + 30), 1, 0)
+            if TextService and IsValid(TextService) and IsValid(data.button.RemoteNameLabel) then
+                local numSize = TextService:GetTextSize(data.button.NumberLabel.Text, data.button.NumberLabel.TextSize, data.button.NumberLabel.Font, Vector2.new())
+                data.button.RemoteNameLabel.Position = UDim2.new(0, numSize.X + 10, 0, 0)
+                data.button.RemoteNameLabel.Size = UDim2.new(1, -(numSize.X + 10 + 30), 1, 0)
+            end
         end
         
-        -- Update argumen terbaru dan script pemanggil jika berbeda
         table.insert(data.argsHistory, args)
-        if #data.argsHistory > 20 then table.remove(data.argsHistory, 1) end -- Batasi history argumen
-        data.callingScript = callingScript -- Selalu update ke pemanggil terbaru
+        if #data.argsHistory > 20 then table.remove(data.argsHistory, 1) end 
+        data.callingScript = callingScript 
 
-        -- Jika remote ini sedang dilihat di InfoFrame, update infonya
         if currentRemoteLookingAt == remote and currentRemoteDataKey == dataKey and isInfoFrameOpen then
             UpdateInfoFrame(remote, dataKey)
         end
@@ -1793,26 +1844,28 @@ local function addToListInternal(isEvent, remote, callingScript, ...)
     setThreadContextFunc(currentId)
 end
 
--- Hooking Functions
 local OldEvent_FireServer, OldFunction_InvokeServer, OldNamecall
 
-if Instance.new("RemoteEvent").FireServer then
-    OldEvent_FireServer = hookfunction(Instance.new("RemoteEvent").FireServer, function(self, ...)
+local remoteEventProto = Instance.new("RemoteEvent")
+if remoteEventProto.FireServer then
+    OldEvent_FireServer = hookfunction(remoteEventProto.FireServer, function(self, ...)
         if not fireServerHookActive then return OldEvent_FireServer(self, ...) end
-        if not checkcaller() and table.find(BlockList, self) then return end -- Blokir jika bukan dari game dan ada di BlockList
+        if not checkcaller() and table.find(BlockList, self) then return end 
         
         local script = getCallingScriptFunc and getCallingScriptFunc() or nil
         addToListInternal(true, self, script, ...)
         return OldEvent_FireServer(self, ...)
     end)
 else
-    warn("TurtleSpy: Gagal hook RemoteEvent.FireServer (mungkin sudah dihook atau tidak ada).")
+    warn("TurtleSpy: Gagal hook RemoteEvent.FireServer.")
 end
+remoteEventProto:Destroy()
 
-if Instance.new("RemoteFunction").InvokeServer then
-    OldFunction_InvokeServer = hookfunction(Instance.new("RemoteFunction").InvokeServer, function(self, ...)
+local remoteFunctionProto = Instance.new("RemoteFunction")
+if remoteFunctionProto.InvokeServer then
+    OldFunction_InvokeServer = hookfunction(remoteFunctionProto.InvokeServer, function(self, ...)
         if not invokeServerHookActive then return OldFunction_InvokeServer(self, ...) end
-        if not checkcaller() and table.find(BlockList, self) then return end -- Blokir
+        if not checkcaller() and table.find(BlockList, self) then return end 
         
         local script = getCallingScriptFunc and getCallingScriptFunc() or nil
         addToListInternal(false, self, script, ...)
@@ -1821,22 +1874,23 @@ if Instance.new("RemoteFunction").InvokeServer then
 else
     warn("TurtleSpy: Gagal hook RemoteFunction.InvokeServer.")
 end
+remoteFunctionProto:Destroy()
 
 if hookmetamethod then
     OldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
         if not namecallHookActive then return OldNamecall(self, ...) end
         
         local method = getNamecallMethodFunc and getNamecallMethodFunc() or ""
-        local args = {...} -- Ambil argumen untuk __namecall
+        local args = {...} 
 
         if method == "FireServer" and self:IsA("RemoteEvent") then
             if not checkcaller() and table.find(BlockList, self) then return end
             local script = getCallingScriptFunc and getCallingScriptFunc() or nil
-            addToListInternal(true, self, script, unpack(args)) -- Unpack args untuk FireServer
+            addToListInternal(true, self, script, unpack(args)) 
         elseif method == "InvokeServer" and self:IsA("RemoteFunction") then
             if not checkcaller() and table.find(BlockList, self) then return end
             local script = getCallingScriptFunc and getCallingScriptFunc() or nil
-            addToListInternal(false, self, script, unpack(args)) -- Unpack args untuk InvokeServer
+            addToListInternal(false, self, script, unpack(args)) 
         end
         return OldNamecall(self, ...)
     end)
@@ -1844,27 +1898,35 @@ else
     warn("TurtleSpy: hookmetamethod tidak tersedia. Namecall tidak akan terdeteksi.")
 end
 
--- Inisialisasi akhir
-FilterRemotes("") -- Tampilkan semua log awal
-TurtleSpyGUI.Enabled = true -- Tampilkan GUI saat dimuat
-HeaderTextLabel.Text = "TurtleSpy V2 (" .. executorName .. ")"
+FilterRemotes("") 
+if IsValid(TurtleSpyGUI) then TurtleSpyGUI.Enabled = true end
+if IsValid(HeaderTextLabel) then HeaderTextLabel.Text = "TurtleSpy V2 (" .. executorName .. ")" end
 
--- Pembersihan saat script dihancurkan (jika memungkinkan)
-if script and script:IsA("Script") then -- Atau LocalScript
+if script and script.Destroying then 
     script.Destroying:Connect(function()
-        if OldEvent_FireServer and typeof(OldEvent_FireServer) == 'function' then OldEvent_FireServer() end -- Unhook jika hookfunction mengembalikan fungsi unhook
-        if OldFunction_InvokeServer and typeof(OldFunction_InvokeServer) == 'function' then OldFunction_InvokeServer() end
-        if OldNamecall and typeof(OldNamecall) == 'function' then OldNamecall() end -- Ini mungkin tidak standar untuk unhook metamethod
+        if OldEvent_FireServer and typeof(OldEvent_FireServer) == 'function' then 
+            local suc, err = pcall(OldEvent_FireServer)
+            if not suc then warn("Error unhooking FireServer:", err) end
+        end 
+        if OldFunction_InvokeServer and typeof(OldFunction_InvokeServer) == 'function' then 
+            local suc, err = pcall(OldFunction_InvokeServer)
+            if not suc then warn("Error unhooking InvokeServer:", err) end
+        end
+        if OldNamecall and typeof(OldNamecall) == 'function' then 
+            local suc, err = pcall(OldNamecall)
+            if not suc then warn("Error unhooking Namecall:", err) end
+        end
 
         for _, conn in ipairs(activeConnections) do
             if conn and conn.Connected then conn:Disconnect() end
         end
         activeConnections = {}
         if IsValid(TurtleSpyGUI) then TurtleSpyGUI:Destroy() end
-        -- Simpan pengaturan saat keluar?
-        pcall(writefile, settingsFileName, HttpService:JSONEncode(settings))
+        pcall(writefileFunc, settingsFileName, HttpService:JSONEncode(settings))
     end)
 end
 
--- Pesan bahwa skrip telah dimuat
-print("TurtleSpy V2 Enhanced by Gemini loaded. Executor: " .. executorName .. ". Keybind: " .. settings.Keybind)
+print("TurtleSpy V2 Enhanced (Arceus X Fix) loaded. Executor: " .. executorName .. ". Keybind: " .. settings.Keybind)
+if isArceusXDetected and (not readfileFunc or not writefileFunc or not isfileFunc or readfileFunc == nil or writefileFunc == nil or isfileFunc == nil) then
+    warn("TurtleSpy (Arceus X): File operations might be unreliable. Saving/loading sessions may not work correctly.")
+end
