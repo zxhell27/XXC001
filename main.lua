@@ -1,4 +1,3 @@
-lanjutkan code ini dibawah ini berdasarkan referensi-- TurtleSpy V1.5.4, credits to Intrer#0421, updated to support UnreliableRemoteEvents
 
 local colorSettings =
 {
