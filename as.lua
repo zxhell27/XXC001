@@ -444,10 +444,29 @@ InfoFrame.Parent = mainFrame
 InfoFrame.BackgroundColor3 = colorSettings["Main"]["MainBackgroundColor"]
 InfoFrame.BorderColor3 = colorSettings["Main"]["MainBackgroundColor"]
 InfoFrame.Position = UDim2.new(0.368141592, 0, -5.58035717e-05, 0)
-InfoFrame.Size = UDim2.new(0, 357, 0, 322)
+InfoFrame.Size = UDim2.new(0, 357, 0, 410)
 InfoFrame.Visible = false
 InfoFrame.ZIndex = 6
 
+-- Tambahan TextLabel untuk menampilkan argumen
+local ArgumentsDisplay = Instance.new("TextLabel")
+ArgumentsDisplay.Name = "ArgumentsDisplay"
+ArgumentsDisplay.Parent = InfoFrame
+ArgumentsDisplay.BackgroundColor3 = colorSettings["Code"]["BackgroundColor"]
+ArgumentsDisplay.BorderColor3 = Color3.fromRGB(100, 100, 100)
+ArgumentsDisplay.Position = UDim2.new(0.05, 0, 0.75, 0) -- letak bawah InfoFrame
+ArgumentsDisplay.Size = UDim2.new(0.9, 0, 0.2, 0)
+ArgumentsDisplay.ZIndex = 20
+ArgumentsDisplay.Font = Enum.Font.SourceSans
+ArgumentsDisplay.TextColor3 = colorSettings["Code"]["TextColor"]
+ArgumentsDisplay.TextSize = 14
+ArgumentsDisplay.TextWrapped = true
+ArgumentsDisplay.TextXAlignment = Enum.TextXAlignment.Left
+ArgumentsDisplay.TextYAlignment = Enum.TextYAlignment.Top
+ArgumentsDisplay.Text = "Arguments will appear here when 'View Arguments' is pressed."
+ArgumentsDisplay.Visible = false  -- Mulai disembunyikan
+ArgumentsDisplay.AutomaticSize = Enum.AutomaticSize.None
+ArgumentsDisplay.RichText = false
 InfoFrameHeader.Name = "InfoFrameHeader"
 InfoFrameHeader.Parent = InfoFrame
 InfoFrameHeader.BackgroundColor3 = colorSettings["Main"]["HeaderColor"]
@@ -524,6 +543,21 @@ InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 1, 0)
 InfoButtonsScroll.ScrollBarThickness = 8
 InfoButtonsScroll.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Left
 InfoButtonsScroll.ScrollBarImageColor3 = colorSettings["Main"]["ScrollBarImageColor"]
+
+local function updateInfoButtonsScrollCanvasSize()
+    local maxHeight = 0
+    for _, child in pairs(InfoButtonsScroll:GetChildren()) do
+        if child:IsA("GuiButton") or child:IsA("GuiObject") then
+            local bottom = child.Position.Y.Offset + child.Size.Y.Offset
+            if bottom > maxHeight then
+                maxHeight = bottom
+            end
+        end
+    end
+    maxHeight = maxHeight + 60 -- padding tambahan untuk ArgumentsDisplay
+    InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 0, maxHeight)
+end
+updateInfoButtonsScrollCanvasSize()
 
 CopyCode.Name = "CopyCode"
 CopyCode.Parent = InfoButtonsScroll
@@ -649,10 +683,13 @@ ViewArgs.TextSize = 16.000
 ViewArgs.MouseButton1Click:Connect(function()
     if lookingAt and lookingAtArgs then
         local argsString = convertTableToString(lookingAtArgs)
-        print("Arguments: " .. argsString)
-        -- Opsional: Tampilkan di GUI baru jika diinginkan
-        setclipboard(argsString) -- Salin ke clipboard untuk kemudahan
-        ButtonEffect(ViewArgs, "Args Copied!")
+        ArgumentsDisplay.Text = "Arguments:\n" .. argsString
+        ArgumentsDisplay.Visible = true
+        ButtonEffect(ViewArgs, "Args Displayed!")
+    else
+        ArgumentsDisplay.Text = "No arguments available to display."
+        ArgumentsDisplay.Visible = true
+        ButtonEffect(ViewArgs, "No Args")
     end
 end)
 
