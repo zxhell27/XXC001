@@ -633,6 +633,29 @@ CopyReturn.Text = "Execute and copy return value"
 CopyReturn.TextColor3 = Color3.fromRGB(250, 251, 255)
 CopyReturn.TextSize = 16.000
 
+local ViewArgs = Instance.new("TextButton")
+ViewArgs.Name = "ViewArgs"
+ViewArgs.Parent = InfoButtonsScroll
+ViewArgs.BackgroundColor3 = colorSettings["MainButtons"]["BackgroundColor"]
+ViewArgs.BorderColor3 = colorSettings["MainButtons"]["BorderColor"]
+ViewArgs.Position = UDim2.new(0.0645, 0, 0, 360)
+ViewArgs.Size = UDim2.new(0, 294, 0, 26)
+ViewArgs.ZIndex = 15
+ViewArgs.Font = Enum.Font.SourceSans
+ViewArgs.Text = "View Arguments"
+ViewArgs.TextColor3 = Color3.fromRGB(250, 251, 255)
+ViewArgs.TextSize = 16.000
+
+ViewArgs.MouseButton1Click:Connect(function()
+    if lookingAt and lookingAtArgs then
+        local argsString = convertTableToString(lookingAtArgs)
+        print("Arguments: " .. argsString)
+        -- Opsional: Tampilkan di GUI baru jika diinginkan
+        setclipboard(argsString) -- Salin ke clipboard untuk kemudahan
+        ButtonEffect(ViewArgs, "Args Copied!")
+    end
+end)
+
 DoNotStack.Name = "DoNotStack"
 DoNotStack.Parent = InfoButtonsScroll
 DoNotStack.BackgroundColor3 = colorSettings["MainButtons"]["BackgroundColor"]
@@ -1025,6 +1048,16 @@ RemoteScrollFrame.ChildAdded:Connect(function(child)
     table.insert(connections, connection)
 end)
 
+local logFile = "TurtleSpyLog.txt"
+
+local function logToFile(message)
+    if isfile(logFile) then
+        appendfile(logFile, message .. "\n")
+    else
+        writefile(logFile, message .. "\n")
+    end
+end
+
 function addToList(type, remote, ...)
     local currentId = (get_thread_context or syn.get_thread_identity)()
     ;(set_thread_context or syn.set_thread_identity)(7)
@@ -1032,6 +1065,7 @@ function addToList(type, remote, ...)
     local name = remote.Name
     local args = {...}
     local i = FindRemote(remote, args)
+    logToFile("Remote called: " .. name .. " with args: " .. convertTableToString(args)) -- Tambahkan logging di sini
     if not i then
         table.insert(remotes, remote)
         local rButton = clone(RemoteButton)
@@ -1059,7 +1093,7 @@ function addToList(type, remote, ...)
             RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollSizeOffset)
         end
     else
-        remoteButtons[i].Text = tostring(tonumber(remoteButtons[i].Text) + 1)
+       remoteButtons[i].Text = tostring(tonumber(remoteButtons[i].Text) + 1)
         local numberTextsize = getTextSize(TextService, remoteButtons[i].Text, remoteButtons[i].TextSize, remoteButtons[i].Font, Vector2.new(math.huge, math.huge))
         remoteButtons[i].Parent.RemoteName.Position = UDim2.new(0, numberTextsize.X + 10, 0, 0)
         remoteButtons[i].Parent.RemoteName.Size = UDim2.new(0, 149 - numberTextsize.X, 0, 26)
