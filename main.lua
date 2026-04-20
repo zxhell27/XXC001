@@ -1,114 +1,140 @@
 --//====================================================--
---// FIX & OPTIMIZED VERSION
+--// WICIDA OPTIMIZED - ANTI-STUCK VERSION
 --//====================================================--
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
-
 local LocalPlayer = Players.LocalPlayer
 
--- Fix: Gunakan pcall untuk memuat library agar tidak crash jika link mati
-local function GetLibrary(url)
-    local success, result = pcall(function()
-        return game:HttpGet(url)
-    end)
-    if success and not result:find("<!DOCTYPE html>") then
-        return loadstring(result)()
-    else
-        warn("Gagal memuat library dari: " .. url)
-        return nil
-    end
-end
-
-local Library = GetLibrary("https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/Library.lua")
-if not Library then return end -- Berhenti jika library gagal dimuat
-
---//====================================================--
---// DYNAMIC SCANNING (Mencegah Infinite Yield)
---//====================================================--
-
--- Fix: Jangan pakai WaitForChild tanpa timeout kalau tidak yakin foldernya ada
-local MapStuff = Workspace:FindFirstChild("MapStuff") or Workspace:FindFirstChild("Resources") or Workspace
-
-local function GetEnemyNames()
-    local folder = Workspace:FindFirstChild("Enemies")
-    if not folder then return {} end
-    local names = {}
-    for _, enemy in pairs(folder:GetChildren()) do
-        if not table.find(names, enemy.Name) then
-            table.insert(names, enemy.Name)
-        end
-    end
-    return names
+-- Fungsi pengaman agar script tidak "mogok" (Infinite Yield)
+local function GetFolder(name)
+    return Workspace:FindFirstChild(name) -- Menggunakan FindFirstChild agar tidak menunggu selamanya
 end
 
 --//====================================================--
---// UI SETUP
+--// LOAD UI LIBRARY (DENGAN PROTEKSI)
 --//====================================================--
+local LibraryURL = "https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/Library.lua"
+local Library = loadstring(game:HttpGet(LibraryURL))()
 
-local Window = Library:CreateWindow({ Title = "WiCiDa Optimizer | Fix Version", Center = true, AutoShow = true })
-local FarmTab = Window:AddTab("Farm")
-
-local EnemyBox = FarmTab:AddLeftGroupbox("Auto Scan & Farm")
-
--- Fitur Scan Otomatis Musuh
-local EnemyDropdown = EnemyBox:AddDropdown("EnemyDropdown", {
-    Text = "Select Enemies",
-    Values = GetEnemyNames(),
-    Multi = true,
+local Window = Library:CreateWindow({
+    Title = "WiCiDa Pro | Fix Interaction",
+    Center = true,
+    AutoShow = true
 })
 
-EnemyBox:AddToggle("AutoFarm", { Text = "Aktifkan Auto Farm" }):OnChanged(function(v)
-    _G.AutoFarm = v
-end)
+-- Variabel kontrol (State)
+local Options = {
+    AutoFarm = false,
+    FarmAll = false,
+    SelectedEnemies = {}
+}
 
 --//====================================================--
---// IMPROVED ATTACK LOOP
---////====================================================--
+--// TAB SETUP
+--//====================================================--
+local MainTab = Window:AddTab("Main")
+local EnemyBox = MainTab:AddLeftGroupbox("Combat")
 
+-- Fungsi Scan Musuh
+local function GetEnemyList()
+    local folder = GetFolder("Enemies")
+    local list = {}
+    if folder then
+        for _, v in pairs(folder:GetChildren()) do
+            if not table.find(list, v.Name) then table.insert(list, v.Name) end
+        end
+    end
+    return list
+end
+
+-- DROPDOWN (Pilih Musuh)
+local EnemyDropdown = EnemyBox:AddDropdown("EnemyDropdown", {
+    Text = "Pilih Musuh",
+    Values = GetEnemyList(),
+    Multi = true,
+    AllowNull = true
+})
+
+EnemyDropdown:OnChanged(function()
+    Options.SelectedEnemies = EnemyDropdown.Value
+end)
+
+-- TOGGLE AUTO FARM
+EnemyBox:AddToggle("AutoFarmToggle", {
+    Text = "Aktifkan Auto Farm",
+    Default = false,
+    Tooltip = "Teleport dan serang musuh otomatis"
+}):OnChanged(function()
+    Options.AutoFarm = Toggles.AutoFarmToggle.Value
+    if Options.AutoFarm then
+        Library:Notify("Auto Farm Aktif!")
+    end
+end)
+
+EnemyBox:AddToggle("FarmAllToggle", {
+    Text = "Serang Semua Jenis",
+    Default = false
+}):OnChanged(function()
+    Options.FarmAll = Toggles.FarmAllToggle.Value
+end)
+
+-- BUTTON REFRESH (Jika dropdown kosong)
+EnemyBox:AddButton({
+    Text = "Refresh Daftar Musuh",
+    Func = function()
+        EnemyDropdown:SetValues(GetEnemyList())
+        Library:Notify("Daftar musuh diperbarui!")
+    end
+})
+
+--//====================================================--
+--// LOGIKA FARM (BERJALAN DI BACKGROUND)
+--//====================================================--
 task.spawn(function()
-    while task.wait(0.1) do
-        if not _G.AutoFarm then continue end
+    while true do
+        task.wait(0.1)
         
-        local enemiesFolder = Workspace:FindFirstChild("Enemies")
-        if not enemiesFolder then continue end
+        if Options.AutoFarm then
+            local folder = GetFolder("Enemies")
+            if not folder then continue end
 
-        for _, enemy in ipairs(enemiesFolder:GetChildren()) do
-            if not _G.AutoFarm then break end
-            
-            local hum = enemy:FindFirstChildOfClass("Humanoid")
-            local hrp = enemy:FindFirstChild("HumanoidRootPart")
+            for _, enemy in pairs(folder:GetChildren()) do
+                if not Options.AutoFarm then break end
+                
+                local hum = enemy:FindFirstChildOfClass("Humanoid")
+                local hrp = enemy:FindFirstChild("HumanoidRootPart")
 
-            if hum and hum.Health > 0 and hrp then
-                -- Teleport & Attack (Gunakan pcall pada remote)
-                pcall(function()
-                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                        LocalPlayer.Character.HumanoidRootPart.CFrame = hrp.CFrame * CFrame.new(0, 0, 3)
+                if hum and hum.Health > 0 and hrp then
+                    -- Filter Musuh
+                    if Options.FarmAll or Options.SelectedEnemies[enemy.Name] then
                         
-                        -- Panggil remote combat di sini (pastikan path benar)
-                        local Knit = ReplicatedStorage:FindFirstChild("Packages") and ReplicatedStorage.Packages:FindFirstChild("Knit")
-                        if Knit then
-                            local Combat = Knit.Services.CombatService.RF.RegisterAttack
-                            Combat:InvokeServer({
-                                AttackStart = tick(),
-                                Combo = 1
-                            })
+                        -- Loop Serang satu musuh sampai mati
+                        while Options.AutoFarm and hum.Health > 0 and enemy.Parent do
+                            pcall(function()
+                                -- Teleport ke musuh
+                                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                                    LocalPlayer.Character.HumanoidRootPart.CFrame = hrp.CFrame * CFrame.new(0, 0, 3)
+                                end
+                                
+                                -- Panggil Remote Attack (Sesuaikan dengan game)
+                                local Knit = ReplicatedStorage:FindFirstChild("Packages") and ReplicatedStorage.Packages:FindFirstChild("Knit")
+                                if Knit then
+                                    local Combat = Knit.Services.CombatService.RF.RegisterAttack
+                                    Combat:InvokeServer({
+                                        AttackStart = tick(),
+                                        Combo = 1
+                                    })
+                                end
+                            end)
+                            task.wait(0.05) -- Kecepatan pukul
                         end
                     end
-                end)
+                end
             end
         end
     end
 end)
 
--- Auto Refresh List tiap 5 detik agar musuh baru muncul di daftar
-task.spawn(function()
-    while task.wait(5) do
-        if EnemyDropdown then
-            EnemyDropdown:SetValues(GetEnemyNames())
-        end
-    end
-end)
-
-Library:Notify("Fix Loaded: MapStuff error bypassed.")
+Library:Notify("Script Berhasil Dimuat! Silakan tekan tombol.")
